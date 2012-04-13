@@ -5962,7 +5962,7 @@ sub readClasses($$$)
                 }
                 if(my $PackageName = get_SFormat($CurrentPackage)) {
                     $CurrentMethod = $PackageName."/".$CurrentMethod;
-                }print $LINE."\n" if($CurrentMethod eq "com/sleepycat/je/dbi/StartupTracker.Counter.com.sleepycat.je.dbi.StartupTracker.Counter:()V");
+                }
             }
             else {
                 exitStatus("Error", "internal error - can't read method signature");
@@ -6581,13 +6581,17 @@ sub get_OSgroup()
 
 sub dump_sorting($)
 {
-    my $hash = $_[0];
-    return [] if(not $hash or not keys(%{$hash}));
-    if((keys(%{$hash}))[0]=~/\A\d+\Z/) {
-        return [sort {int($a) <=> int($b)} keys(%{$hash})];
+    my $Hash = $_[0];
+    return [] if(not $Hash);
+    my @Keys = keys(%{$Hash});
+    return [] if($#Keys<0);
+    if($Keys[0]=~/\A\d+\Z/)
+    { # numbers
+        return [sort {int($a)<=>int($b)} @Keys];
     }
-    else {
-        return [sort {$a cmp $b} keys(%{$hash})];
+    else
+    { # strings
+        return [sort {$a cmp $b} @Keys];
     }
 }
 
@@ -6862,12 +6866,15 @@ sub scenario()
         exit(0);
     }
     if(defined $DumpVersion) {
-        print "$TOOL_VERSION\n";
+        print $TOOL_VERSION."\n";
         exit(0);
     }
     $Data::Dumper::Sortkeys = 1;
+    
     # FIXME: can't pass \&dump_sorting - cause a segfault sometimes
+    # $Data::Dumper::Useperl = 1;
     # $Data::Dumper::Sortkeys = \&dump_sorting;
+    
     detect_default_paths();
     if(defined $TestSystem) {
         testSystem();
