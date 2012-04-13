@@ -1,0 +1,87 @@
+
+Copyright (C) 2011 Russian Linux Verification Center
+Copyright (C) 2011-2012 ROSA Laboratory
+All rights reserved.
+
+
+RELEASE INFORMATION
+
+Project:           Java API Compliance Checker (Java ACC)
+Version:           1.1
+Date:              2012-04-16
+
+
+This INSTALL.txt file explains how to install and setup environment
+for Java ACC tool in your computer.
+
+
+Content:
+
+   1. Requirements for Linux, FreeBSD and Mac OS X
+   2. Requirements for MS Windows
+   3. Configuring and Installing
+   4. Running the Tool
+   5. Advanced Usage
+
+
+1. REQUIREMENTS FOR LINUX, FREEBSD and MAC OS X
+===============================================
+
+   1. JDK (javap, javac)
+   2. Perl (5.8-5.14)
+
+
+
+2. REQUIREMENTS FOR MS WINDOWS
+==============================
+
+   1. Java Development Kit (javap, javac)
+   2. Active Perl (5.8-5.14)
+
+
+
+3. CONFIGURING AND INSTALLING
+=============================
+
+   This command will install an japi-compliance-checker program in the
+   PREFIX/bin system directory:
+
+     sudo perl Makefile.pl -install --prefix=PREFIX [/usr, /usr/local, ...]
+
+3.1 Update
+
+     sudo perl Makefile.pl -update --prefix=PREFIX
+
+3.2 Remove
+
+     sudo perl Makefile.pl -remove --prefix=PREFIX
+
+
+
+4. RUNNING THE TOOL
+===================
+
+   1. japi-compliance-checker -old OLD.jar -new NEW.jar
+
+
+
+5. ADVANCED USAGE
+===================
+   1. Create XML-descriptors for two versions
+      of a library (OLD.xml and NEW.xml):
+            <version>
+                1.0
+            </version>
+    
+            <archives>
+                /path1/to/JAR(s)/
+                /path2/to/JAR(s)/
+                ...
+            </archives>
+
+   2. japi-compliance-checker -lib NAME -old OLD.xml -new NEW.xml
+   3. For more advanced usage, see doc/Readme.html
+
+
+
+Enjoy!
