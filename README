@@ -1,0 +1,11 @@
+NAME:
+  Java API Compliance Checker (Java ACC) - a tool for checking backward binary and source-level compatibility of a Java library API.
+
+INSTALL:
+  sudo perl Makefile.pl -install --prefix=/usr
+
+USAGE:
+  japi-compliance-checker -old OLD.jar -new NEW.jar
+
+ADV. USAGE:
+  For advanced usage, see doc/Readme.html or output of --help option.
