@@ -3590,8 +3590,14 @@ sub get_Report_TypeProblems($$)
                             my $ShortSignature = get_Signature($Target, 2, "Short");
                             my $ClassName_Full = get_TypeName($MethodInfo{2}{$Target}{"Class"}, 2);
                             $Change = "Abstract method ".black_name($MethodInfo{2}{$Target}{"Signature"})." has been added to this $Type_Type.";
-                            if($Level eq "Binary") {
-                                $Effect = "A client program may be interrupted by <b>AbstractMethodError</b> exception.$Add_Effect";
+                            if($Level eq "Binary")
+                            {
+                                if($Add_Effect) {
+                                    $Effect = "A client program may be interrupted by <b>AbstractMethodError</b> exception.".$Add_Effect;
+                                }
+                                else {
+                                    $Effect = "No effect.";
+                                }
                             }
                             else {
                                 $Effect = "Recompilation of a client program may be terminated with the message: a client class C is not abstract and does not override abstract method <b>$ShortSignature</b> in <b>$ClassName_Full</b>.";
@@ -3615,8 +3621,14 @@ sub get_Report_TypeProblems($$)
                             my $ShortSignature = get_Signature($Target, 2, "Short");
                             my $ClassName_Full = get_TypeName($MethodInfo{2}{$Target}{"Class"}, 2);
                             $Change = "Abstract method ".black_name($MethodInfo{2}{$Target}{"Signature"})." has been added to this $Type_Type.";
-                            if($Level eq "Binary") {
-                                $Effect = "A client program may be interrupted by <b>AbstractMethodError</b> exception.".$Add_Effect;
+                            if($Level eq "Binary")
+                            {
+                                if($Add_Effect) {
+                                    $Effect = "A client program may be interrupted by <b>AbstractMethodError</b> exception.".$Add_Effect;
+                                }
+                                else {
+                                    $Effect = "No effect.";
+                                }
                             }
                             else {
                                 $Effect = "Recompilation of a client program may be terminated with the message: a client class C is not abstract and does not override abstract method <b>$ShortSignature</b> in <b>$ClassName_Full</b>.";
@@ -3652,8 +3664,14 @@ sub get_Report_TypeProblems($$)
                         elsif($Kind eq "Abstract_Class_Added_Super_Interface")
                         {
                             $Change = "Added super-interface <b>".htmlSpecChars($Target)."</b>.";
-                            if($Level eq "Binary") {
-                                $Effect = "If abstract methods from an added super-interface must be implemented by client then it may be interrupted by <b>AbstractMethodError</b> exception.$Add_Effect";
+                            if($Level eq "Binary")
+                            {
+                                if($Add_Effect) {
+                                    $Effect = "If abstract methods from an added super-interface must be implemented by client then it may be interrupted by <b>AbstractMethodError</b> exception.".$Add_Effect;
+                                }
+                                else {
+                                    $Effect = "No effect.";
+                                }
                             }
                             else {
                                 $Effect = "Recompilation of a client program may be terminated with the message: a client class C is not abstract and does not override abstract method in <b>$TypeName</b>.";
@@ -3662,8 +3680,14 @@ sub get_Report_TypeProblems($$)
                         elsif($Kind eq "Interface_Added_Super_Interface")
                         {
                             $Change = "Added super-interface <b>".htmlSpecChars($Target)."</b>.";
-                            if($Level eq "Binary") {
-                                $Effect = "If abstract methods from an added super-interface must be implemented by client then it may be interrupted by <b>AbstractMethodError</b> exception.$Add_Effect";
+                            if($Level eq "Binary")
+                            {
+                                if($Add_Effect) {
+                                    $Effect = "If abstract methods from an added super-interface must be implemented by client then it may be interrupted by <b>AbstractMethodError</b> exception.".$Add_Effect;
+                                }
+                                else {
+                                    $Effect = "No effect.";
+                                }
                             }
                             else {
                                 $Effect = "Recompilation of a client program may be terminated with the message: a client class C is not abstract and does not override abstract method in <b>$Target</b>.";
@@ -3708,8 +3732,14 @@ sub get_Report_TypeProblems($$)
                         elsif($Kind eq "Abstract_Class_Added_Super_Abstract_Class")
                         {
                             $Change = "Added abstract super-class <b>".htmlSpecChars($Target)."</b>.";
-                            if($Level eq "Binary") {
-                                $Effect = "If abstract methods from an added super-class must be implemented by client then it may be interrupted by <b>AbstractMethodError</b> exception.$Add_Effect";
+                            if($Level eq "Binary")
+                            {
+                                if($Add_Effect) {
+                                    $Effect = "If abstract methods from an added super-class must be implemented by client then it may be interrupted by <b>AbstractMethodError</b> exception.".$Add_Effect;
+                                }
+                                else {
+                                    $Effect = "No effect.";
+                                }
                             }
                             else {
                                 $Effect = "Recompilation of a client program may be terminated with the message: a client class C is not abstract and does not override abstract method in <b>$Target</b>.";
@@ -5962,7 +5992,7 @@ sub readClasses($$$)
                 }
                 if(my $PackageName = get_SFormat($CurrentPackage)) {
                     $CurrentMethod = $PackageName."/".$CurrentMethod;
-                }print $LINE."\n" if($CurrentMethod eq "com/sleepycat/je/dbi/StartupTracker.Counter.com.sleepycat.je.dbi.StartupTracker.Counter:()V");
+                }
             }
             else {
                 exitStatus("Error", "internal error - can't read method signature");
@@ -6581,13 +6611,17 @@ sub get_OSgroup()
 
 sub dump_sorting($)
 {
-    my $hash = $_[0];
-    return [] if(not $hash or not keys(%{$hash}));
-    if((keys(%{$hash}))[0]=~/\A\d+\Z/) {
-        return [sort {int($a) <=> int($b)} keys(%{$hash})];
+    my $Hash = $_[0];
+    return [] if(not $Hash);
+    my @Keys = keys(%{$Hash});
+    return [] if($#Keys<0);
+    if($Keys[0]=~/\A\d+\Z/)
+    { # numbers
+        return [sort {int($a)<=>int($b)} @Keys];
     }
-    else {
-        return [sort {$a cmp $b} keys(%{$hash})];
+    else
+    { # strings
+        return [sort {$a cmp $b} @Keys];
     }
 }
 
@@ -6862,12 +6896,15 @@ sub scenario()
         exit(0);
     }
     if(defined $DumpVersion) {
-        print "$TOOL_VERSION\n";
+        print $TOOL_VERSION."\n";
         exit(0);
     }
     $Data::Dumper::Sortkeys = 1;
+    
     # FIXME: can't pass \&dump_sorting - cause a segfault sometimes
+    # $Data::Dumper::Useperl = 1;
     # $Data::Dumper::Sortkeys = \&dump_sorting;
+    
     detect_default_paths();
     if(defined $TestSystem) {
         testSystem();
