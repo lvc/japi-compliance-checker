@@ -21,7 +21,7 @@
 </style>
 <script src="/load.php?debug=false&amp;lang=en&amp;modules=startup&amp;only=scripts&amp;skin=monobook&amp;*"></script>
 <script>if(window.mw){
-	mw.config.set({"wgCanonicalNamespace": "", "wgCanonicalSpecialPageName": false, "wgNamespaceNumber": 0, "wgPageName": "Java_API_Compliance_Checker_Options", "wgTitle": "Java API Compliance Checker Options", "wgCurRevisionId": 7551, "wgArticleId": 2600, "wgIsArticle": true, "wgAction": "view", "wgUserName": null, "wgUserGroups": ["*"], "wgCategories": ["Java API Compliance Checker"], "wgBreakFrames": false, "wgRestrictionEdit": [], "wgRestrictionMove": []});
+	mw.config.set({"wgCanonicalNamespace": "", "wgCanonicalSpecialPageName": false, "wgNamespaceNumber": 0, "wgPageName": "Java_API_Compliance_Checker_Options", "wgTitle": "Java API Compliance Checker Options", "wgCurRevisionId": 7892, "wgArticleId": 2600, "wgIsArticle": true, "wgAction": "view", "wgUserName": null, "wgUserGroups": ["*"], "wgCategories": ["Java API Compliance Checker"], "wgBreakFrames": false, "wgRestrictionEdit": [], "wgRestrictionMove": []});
 }
 </script><script>if(window.mw){
 	mw.loader.load(["mediawiki.page.startup"]);
@@ -63,10 +63,10 @@
 <div style="padding-left:40px;">Library name (without version). It affects only on the path and the title of the report.</div><br />
 <ul><li><b>-d1|-old|-o &lt;path&gt;</b>
 </li></ul>
-<div style="padding-left:40px;">Path to the <a href="http://ispras.linuxfoundation.org/index.php/Java_Library_Descriptor" title="Java Library Descriptor">descriptor</a> of 1st (old) library version.</div><br />
+<div style="padding-left:40px;">Path to the Java ARchive or <a href="http://ispras.linuxfoundation.org/index.php/Java_Library_Descriptor" title="Java Library Descriptor">XML-descriptor</a> of 1st (old) library version.</div><br />
 <ul><li><b>-d2|-new|-n &lt;path&gt;</b>
 </li></ul>
-<div style="padding-left:40px;">Path to the <a href="http://ispras.linuxfoundation.org/index.php/Java_Library_Descriptor" title="Java Library Descriptor">descriptor</a> of 2nd (new) library version.</div><br />
+<div style="padding-left:40px;">Path to the Java ARchive or <a href="http://ispras.linuxfoundation.org/index.php/Java_Library_Descriptor" title="Java Library Descriptor">XML-descriptor</a> of 2nd (new) library version.</div><br />
 <h2> <span class="mw-headline" id="Extra_Options"> Extra Options </span></h2>
 <ul><li><b>-client|-app &lt;path&gt;</b>
 </li></ul>
@@ -82,7 +82,7 @@
 <div style="padding-left:40px;">Compare implementation code (method's body) of Java classes. Add "Changes in Implementation" section to the report.</div><br />
 <ul><li><b>-v1|-version1 &lt;num&gt;</b>
 </li></ul>
-<div style="padding-left:40px;">Specify 1st API version outside the descriptor.</div><br />
+<div style="padding-left:40px;">Specify 1st library version outside the descriptor.</div><br />
 <ul><li><b>-v2|-version2 &lt;num&gt;</b>
 </li></ul>
 <div style="padding-left:40px;">Specify 2nd library version outside the descriptor.</div><br />
@@ -95,24 +95,42 @@
 <ul><li><b>-classes-list &lt;path&gt;</b>
 </li></ul>
 <div style="padding-left:40px;">This option allows to specify a file with a list of classes that should be checked, other classes will not be checked.</div><br />
-<ul><li><b>-d|-descriptor-template</b>
+<ul><li><b>-d|-template</b>
 </li></ul>
 <div style="padding-left:40px;">Create XML descriptor template ./VERSION.xml</div><br />
+<ul><li><b>-report-path &lt;path&gt;</b>
+</li></ul>
+<div style="padding-left:40px;">Path to compatibility report. Default: compat_reports/&lt;library name&gt;/&lt;v1&gt;_to_&lt;v2&gt;/compat_report.html</div><br />
+<ul><li><b>-bin-report-path &lt;path&gt;</b>
+</li></ul>
+<div style="padding-left:40px;">Path to "Binary" compatibility report. Default: compat_reports/&lt;library name&gt;/&lt;v1&gt;_to_&lt;v2&gt;/bin_compat_report.html</div><br />
+<ul><li><b>-src-report-path &lt;path&gt;</b>
+</li></ul>
+<div style="padding-left:40px;">Path to "Source" compatibility report. Default: compat_reports/&lt;library name&gt;/&lt;v1&gt;_to_&lt;v2&gt;/src_compat_report.html</div><br />
+<ul><li><b>-quick</b>
+</li></ul>
+<div style="padding-left:40px;">Quick analysis. Disabled: 1) analysis of method parameter names, 2) analysis of class field values, 3) analysis of usage of added abstract methods.</div><br />
 <h2> <span class="mw-headline" id="Other_Options"> Other Options </span></h2>
 <ul><li><b>-test</b>
 </li></ul>
 <div style="padding-left:40px;">Create two incompatible versions of a sample library and run the tool to check them for compatibility. This option allows to check if the tool works correctly in the current environment.</div><br />
+<ul><li><b>-debug</b>
+</li></ul>
+<div style="padding-left:40px;">Debugging mode. Print debug info on the screen. Save intermediate analysis stages in the debug directory: debug/&lt;library&gt;/&lt;version&gt;/. Also consider using --dump option for debugging the tool.</div><br />
 <ul><li><b>-l-full|-lib-full &lt;name&gt;</b>
 </li></ul>
 <div style="padding-left:40px;">Change library name in the report title to &lt;name&gt;. By default will be displayed a name specified by -l option.</div><br />
+<ul><li><b>-b|-browse &lt;program&gt;</b>
+</li></ul>
+<div style="padding-left:40px;">Open report(s) in the browser (firefox, opera, etc.).</div><br />
 
 <!-- 
 NewPP limit report
-Preprocessor node count: 32/1000000
+Preprocessor node count: 38/1000000
 Post-expand include size: 0/2097152 bytes
 Template argument size: 0/2097152 bytes
 Expensive parser function count: 0/100
 -->
 
-<!-- Saved in parser cache with key rasispdb:pcache:idhash:2600-0!*!0!!en!*!* and timestamp 20120413075035 -->
+<!-- Saved in parser cache with key rasispdb:pcache:idhash:2600-0!*!0!!en!*!* and timestamp 20120414164449 -->
 </div></div></div></div></div></body></html>

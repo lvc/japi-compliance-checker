@@ -300,7 +300,7 @@ EXTRA OPTIONS:
       Create XML descriptor template ./VERSION.xml
 
   -report-path <path>
-      Path to joined compatibility report (see -join-report option).
+      Path to compatibility report.
       Default: 
           compat_reports/<library name>/<v1>_to_<v2>/compat_report.html
 
@@ -4026,7 +4026,7 @@ sub getAffectedMethods($$$)
                 $INumber{$Method}=1;
                 my $Param_Pos = $CompatProblems{$Method}{$Kind}{$Location}{"Parameter_Position"};
                 my $Description = getAffectDescription($Method, $Kind, $Location, $Level);
-                $Affected .=  "<span class='nblack'>".highLight_Signature_PPos_Italic($Signature, $Param_Pos, 1, 0)."</span><br/>"."<div class='affect'>".htmlSpecChars($Description)."</div>\n";
+                $Affected .=  "<span class='nblack'>".highLight_Signature_PPos_Italic($Signature, $Param_Pos, 1, 0)."</span><br/>"."<div class='affect'>".$Description."</div>\n";
             }
         }
     }
@@ -4126,7 +4126,7 @@ sub writeReport($$)
 sub createReport()
 {
     if($JoinReport)
-    { # --join-report, --stdout
+    { # --stdout
         writeReport("Join", getReport("Join"));
     }
     elsif($DoubleReport)
@@ -6744,7 +6744,7 @@ sub printReport()
         printStatMsg("Source");
     }
     if($JoinReport)
-    { # --join-report
+    {
         printMsg("INFO", "see detailed report:\n  ".getReportPath("Join"));
     }
     elsif($DoubleReport)
