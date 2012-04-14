@@ -2608,13 +2608,15 @@ sub readLineNum($$)
     return $Line;
 }
 
-sub readAttributes($)
+sub readAttributes($$)
 {
-    my $Path = $_[0];
+    my ($Path, $Num) = @_;
     return () if(not $Path or not -f $Path);
     my %Attributes = ();
-    if(readLineNum($Path, 0)=~/<!--\s+(.+)\s+-->/) {
-        foreach my $AttrVal (split(/;/, $1)) {
+    if(readLineNum($Path, $Num)=~/<!--\s+(.+)\s+-->/)
+    {
+        foreach my $AttrVal (split(/;/, $1))
+        {
             if($AttrVal=~/(.+):(.+)/)
             {
                 my ($Name, $Value) = ($1, $2);
@@ -2658,17 +2660,18 @@ sub runChecker($$$)
         print "running $Cmd\n";
     }
     system($Cmd);
+    my $Report = "compat_reports/$LibName/1.0_to_2.0/compat_report.html";
     # Binary
-    my $CReport = readAttributes("compat_reports/$LibName/1.0_to_2.0/bin_compat_report.html");
-    my $NProblems = $CReport->{"type_problems_high"}+$CReport->{"type_problems_medium"};
-    $NProblems += $CReport->{"method_problems_high"}+$CReport->{"method_problems_medium"};
-    $NProblems += $CReport->{"removed"};
+    my $BReport = readAttributes($Report, 0);
+    my $NProblems = $BReport->{"type_problems_high"}+$BReport->{"type_problems_medium"};
+    $NProblems += $BReport->{"method_problems_high"}+$BReport->{"method_problems_medium"};
+    $NProblems += $BReport->{"removed"};
     # Source
-    $CReport = readAttributes("compat_reports/$LibName/1.0_to_2.0/src_compat_report.html");
-    $NProblems += $CReport->{"type_problems_high"}+$CReport->{"type_problems_medium"};
-    $NProblems += $CReport->{"method_problems_high"}+$CReport->{"method_problems_medium"};
-    $NProblems += $CReport->{"removed"};
-    if($NProblems>90) {
+    my $SReport = readAttributes($Report, 1);
+    $NProblems += $SReport->{"type_problems_high"}+$SReport->{"type_problems_medium"};
+    $NProblems += $SReport->{"method_problems_high"}+$SReport->{"method_problems_medium"};
+    $NProblems += $SReport->{"removed"};
+    if($NProblems>=100) {
         print "test result: SUCCESS ($NProblems breaks found)\n\n";
     }
     else {
