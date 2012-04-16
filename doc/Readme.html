@@ -82,7 +82,7 @@
 </td></tr></table>
 <h2> <span class="mw-headline" id="Downloads"> Downloads </span></h2>
 <h3> <span class="mw-headline" id="Releases"> Releases </span></h3>
-<p>All releases can be downloaded from <b><a href="http://ispras.linuxfoundation.org/index.php/Java_API_Compliance_Checker_Downloads" title="Java API Compliance Checker Downloads">this page</a></b> or <b><a rel="nofollow" class="external text" href="https://github.com/lvc/japi-compliance-checker/downloads/">github.com</a></b>.
+<p>All releases can be downloaded from <b><a href="http://ispras.linuxbase.org/index.php/Java_API_Compliance_Checker_Downloads" title="Java API Compliance Checker Downloads">this page</a></b> or <b><a rel="nofollow" class="external text" href="https://github.com/lvc/japi-compliance-checker/downloads/">github.com</a></b>.
 </p><p>Latest release: <a rel="nofollow" class="external text" href="https://github.com/lvc/japi-compliance-checker/downloads/japi-compliance-checker-1.1.tar.gz">1.1</a>
 </p>
 <h3> <span class="mw-headline" id="Git"> Git </span></h3>
@@ -111,7 +111,7 @@
 </li></ul>
 </li></ul>
 <h2> <span class="mw-headline" id="Detectable_Compatibility_Problems"> Detectable Compatibility Problems </span></h2>
-<p>The tool searches for the following list of changes in the API that may break <b>binary/source-level</b> compatibility. See <a rel="nofollow" class="external text" href="http://wiki.eclipse.org/Evolving_Java-based_APIs_2">“Evolving Java-based APIs: Achieving API Binary Compatibility”</a> and <a href="http://ispras.linuxfoundation.org/index.php/Java_API_Compliance_Checker#Articles" title="Java API Compliance Checker">this list</a> of articles for more info.
+<p>The tool searches for the following list of changes in the API that may break <b>binary/source-level</b> compatibility. See <a rel="nofollow" class="external text" href="http://wiki.eclipse.org/Evolving_Java-based_APIs_2">“Evolving Java-based APIs: Achieving API Binary Compatibility”</a> and <a href="http://ispras.linuxbase.org/index.php/Java_API_Compliance_Checker#Articles" title="Java API Compliance Checker">this list</a> of articles for more info.
 </p>
 <ul><li> <b>Problems with Data Types</b>
 <ul><li> <b>Classes</b> and <b>Interfaces</b>
@@ -161,7 +161,7 @@ You can see detailed problem descriptions in the visual interactive HTML-format 
 &#160;&#160;<code style="border: dashed 1px gray; background-color: #f0f0f0;">&#160;compat_reports/<i>&lt;library_name&gt;</i>/<i>&lt;v1&gt;</i>_to_<i>&lt;v2&gt;</i>/compat_report.html&#160;</code>
 </p>
 <h3> <span class="mw-headline" id="Compare_Libraries"> Compare Libraries </span></h3>
-<p>To compare different versions of a library that consists of many JARs  you should create <b><a href="http://ispras.linuxfoundation.org/index.php/Java_Library_Descriptor" title="Java Library Descriptor">XML descriptors</a></b> for two library versions: <b><a href="http://ispras.linuxfoundation.org/index.php/Java_Library_Descriptor" title="Java Library Descriptor">v1.xml</a></b> and <b><a href="http://ispras.linuxfoundation.org/index.php/Java_Library_Descriptor" title="Java Library Descriptor">v2.xml</a></b> files. Library descriptor is a simple XML-file that specifies version number, paths to Java ARchives and other optional information. An example of the descriptor is the following (1.0.xml):
+<p>To compare different versions of a library that consists of many JARs  you should create <b><a href="http://ispras.linuxbase.org/index.php/Java_Library_Descriptor" title="Java Library Descriptor">XML descriptors</a></b> for two library versions: <b><a href="http://ispras.linuxbase.org/index.php/Java_Library_Descriptor" title="Java Library Descriptor">v1.xml</a></b> and <b><a href="http://ispras.linuxbase.org/index.php/Java_Library_Descriptor" title="Java Library Descriptor">v2.xml</a></b> files. Library descriptor is a simple XML-file that specifies version number, paths to Java ARchives and other optional information. An example of the descriptor is the following (1.0.xml):
 </p>
 <pre> <span style="color:Green;">&lt;version&gt;</span>
      1.0
@@ -174,22 +174,22 @@ You can see detailed problem descriptions in the visual interactive HTML-format 
  <span style="color:Green;">&lt;/archives&gt;</span>
 </pre>
 <p>Command to compare two versions of a library:<br />
-&#160;&#160;<code style="border: dashed 1px gray; background-color: #f0f0f0;">&#160;japi-compliance-checker -l <i>&lt;library_name&gt;</i> -old <i>&lt;<a href="http://ispras.linuxfoundation.org/index.php/Java_Library_Descriptor" title="Java Library Descriptor">v1.xml</a>&gt;</i> -new <i>&lt;<a href="http://ispras.linuxfoundation.org/index.php/Java_Library_Descriptor" title="Java Library Descriptor">v2.xml</a>&gt;</i>&#160;</code><br /><br />
+&#160;&#160;<code style="border: dashed 1px gray; background-color: #f0f0f0;">&#160;japi-compliance-checker -l <i>&lt;library_name&gt;</i> -old <i>&lt;<a href="http://ispras.linuxbase.org/index.php/Java_Library_Descriptor" title="Java Library Descriptor">v1.xml</a>&gt;</i> -new <i>&lt;<a href="http://ispras.linuxbase.org/index.php/Java_Library_Descriptor" title="Java Library Descriptor">v2.xml</a>&gt;</i>&#160;</code><br /><br />
 </p><p>The compatibility report will be generated to:<br />
 &#160;&#160;<code style="border: dashed 1px gray; background-color: #f0f0f0;">&#160;compat_reports/<i>&lt;library_name&gt;</i>/<i>&lt;v1&gt;</i>_to_<i>&lt;v2&gt;</i>/compat_report.html&#160;</code>
 </p>
 <h3> <span class="mw-headline" id="Check_Clients_Portability"> Check Clients Portability </span></h3>
 <p>Command to check a client portability to a newer version of a Java library API:<br />
-&#160;&#160;<code style="border: dashed 1px gray; background-color: #f0f0f0;">&#160;japi-compliance-checker -l <i>&lt;library_name&gt;</i> -old <i>&lt;<a href="http://ispras.linuxfoundation.org/index.php/Java_Library_Descriptor" title="Java Library Descriptor">v1.xml</a>&gt;</i> -new <i>&lt;<a href="http://ispras.linuxfoundation.org/index.php/Java_Library_Descriptor" title="Java Library Descriptor">v2.xml</a>&gt;</i> -client <i>&lt;client.jar&gt;</i>&#160;</code>
+&#160;&#160;<code style="border: dashed 1px gray; background-color: #f0f0f0;">&#160;japi-compliance-checker -l <i>&lt;library_name&gt;</i> -old <i>&lt;<a href="http://ispras.linuxbase.org/index.php/Java_Library_Descriptor" title="Java Library Descriptor">v1.xml</a>&gt;</i> -new <i>&lt;<a href="http://ispras.linuxbase.org/index.php/Java_Library_Descriptor" title="Java Library Descriptor">v2.xml</a>&gt;</i> -client <i>&lt;client.jar&gt;</i>&#160;</code>
 </p>
 <h3> <span class="mw-headline" id="Dump_Library_API_to_TXT_file"> Dump Library API to TXT file </span></h3>
 <p>Command to dump a Java library API to gzipped TXT format file:<br />
-&#160;&#160;<code style="border: dashed 1px gray; background-color: #f0f0f0;">&#160;japi-compliance-checker -l <i>&lt;library_name&gt;</i> -dump <i>&lt;<a href="http://ispras.linuxfoundation.org/index.php/Java_Library_Descriptor" title="Java Library Descriptor">some_version.xml</a>&gt;</i>&#160;</code><br /><br />
+&#160;&#160;<code style="border: dashed 1px gray; background-color: #f0f0f0;">&#160;japi-compliance-checker -l <i>&lt;library_name&gt;</i> -dump <i>&lt;<a href="http://ispras.linuxbase.org/index.php/Java_Library_Descriptor" title="Java Library Descriptor">some_version.xml</a>&gt;</i>&#160;</code><br /><br />
 The API dump will be generated to:<br />
 &#160;&#160;<code style="border: dashed 1px gray; background-color: #f0f0f0;">&#160;api_dumps/<i>&lt;library_name&gt;</i>/<i>&lt;library_name&gt;</i>_<i>&lt;some_version&gt;</i>.api.tar.gz&#160;</code><br />
 </p>
 <h3> <span class="mw-headline" id="Command-Line_Options"> Command-Line Options </span></h3>
-<p>See the list of all options on <b><a href="http://ispras.linuxfoundation.org/index.php/Java_API_Compliance_Checker_Options" title="Java API Compliance Checker Options">this page</a></b>.
+<p>See the list of all options on <b><a href="http://ispras.linuxbase.org/index.php/Java_API_Compliance_Checker_Options" title="Java API Compliance Checker Options">this page</a></b>.
 </p>
 <h3> <span class="mw-headline" id="Examples"> Examples </span></h3>
 <p>Check the JDO library API versions for compatibility:<br />
@@ -215,14 +215,14 @@ Check client application portability between JDO versions:<br />
 </li><li> <b>Problems with Methods</b> - The list of compatibility problems caused by changes in method parameters and attributes (divided by the severity level).
 </li><li> <b>Other Changes in Data Types</b> - The list of compatible changes in data types;
 </li><li> <b>Other Changes in Methods</b> - The list of compatible changes in methods;
-</li><li> <b>Problems with Implementation</b> - The list of changes in decompiled binary code. Use <a href="http://ispras.linuxfoundation.org/index.php/Java_API_Compliance_Checker_Options#Extra_Options" title="Java API Compliance Checker Options">-check-implementation</a> option to enable this section.
+</li><li> <b>Problems with Implementation</b> - The list of changes in decompiled binary code. Use <a href="http://ispras.linuxbase.org/index.php/Java_API_Compliance_Checker_Options#Extra_Options" title="Java API Compliance Checker Options">-check-implementation</a> option to enable this section.
 </li></ul>
 <p>Examples:
 </p>
 <ul><li> JDO: 2.2 to 3.0 compatibility <a rel="nofollow" class="external text" href="http://upstream-tracker.org/java/compat_reports/jdo/2.2_to_3.0/compat_report.html">report</a>
 </li></ul>
 <h2> <span class="mw-headline" id="Verdict_on_Compatibility"> Verdict on Compatibility </span></h2>
-<p>If the tool detected problems with high or medium level of severity or at least one removed method then the compatibility verdict is <b>incompatible</b> (otherwise <b>compatible</b>). Low-severity problems can be considered as <b>warnings</b> and don't affect the compatibility verdict unless the <a href="http://ispras.linuxfoundation.org/index.php/Java_API_Compliance_Checker_Options" title="Java API Compliance Checker Options">-strict</a> option is specified.
+<p>If the tool detected problems with high or medium level of severity or at least one removed method then the compatibility verdict is <b>incompatible</b> (otherwise <b>compatible</b>). Low-severity problems can be considered as <b>warnings</b> and don't affect the compatibility verdict unless the <a href="http://ispras.linuxbase.org/index.php/Java_API_Compliance_Checker_Options" title="Java API Compliance Checker Options">-strict</a> option is specified.
 </p>
 <h2> <span class="mw-headline" id="Error_Codes"> Error Codes </span></h2>
 <table class="wikitable">
@@ -279,7 +279,7 @@ Check client application portability between JDO versions:<br />
 </li><li> <b>Japi-checker</b> - a java API backward compatibility checker which works at binary level
 </li></ol>
 <h2> <span class="mw-headline" id="Maintainers"> Maintainers </span></h2>
-<p>The tool was initially developed by the <a rel="nofollow" class="external text" href="http://linuxtesting.org">Russian Linux Verification Center</a> at <a href="http://ispras.linuxfoundation.org/index.php/ISP_RAS_Company_Profile" title="ISP RAS Company Profile">ISPRAS</a> and is now developed by <a rel="nofollow" class="external text" href="http://www.rosalab.com/">ROSA Laboratory</a> in Russia. <a rel="nofollow" class="external text" href="http://andrey-ponomarenko.myopenid.com/">Andrey Ponomarenko</a> is the leader of this project.
+<p>The tool was initially developed by the <a rel="nofollow" class="external text" href="http://linuxtesting.org">Russian Linux Verification Center</a> at <a href="http://ispras.linuxbase.org/index.php/ISP_RAS_Company_Profile" title="ISP RAS Company Profile">ISPRAS</a> and is now developed by <a rel="nofollow" class="external text" href="http://www.rosalab.com/">ROSA Laboratory</a> in Russia. <a rel="nofollow" class="external text" href="http://andrey-ponomarenko.myopenid.com/">Andrey Ponomarenko</a> is the leader of this project.
 </p>
 <h2> <span class="mw-headline" id="Articles"> Articles </span></h2>
 <ol><li> <a rel="nofollow" class="external text" href="http://wiki.eclipse.org/Evolving_Java-based_APIs_2">Jim des Rivières, <b>“Evolving Java-based APIs: Achieving API Binary Compatibility”</b></a>
