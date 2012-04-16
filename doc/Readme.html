@@ -21,7 +21,7 @@
 </style>
 <script src="/load.php?debug=false&amp;lang=en&amp;modules=startup&amp;only=scripts&amp;skin=monobook&amp;*"></script>
 <script>if(window.mw){
-	mw.config.set({"wgCanonicalNamespace": "", "wgCanonicalSpecialPageName": false, "wgNamespaceNumber": 0, "wgPageName": "Java_API_Compliance_Checker", "wgTitle": "Java API Compliance Checker", "wgCurRevisionId": 7853, "wgArticleId": 2598, "wgIsArticle": true, "wgAction": "view", "wgUserName": null, "wgUserGroups": ["*"], "wgCategories": ["Java API Compliance Checker"], "wgBreakFrames": false, "wgRestrictionEdit": [], "wgRestrictionMove": []});
+	mw.config.set({"wgCanonicalNamespace": "", "wgCanonicalSpecialPageName": false, "wgNamespaceNumber": 0, "wgPageName": "Java_API_Compliance_Checker", "wgTitle": "Java API Compliance Checker", "wgCurRevisionId": 7894, "wgArticleId": 2598, "wgIsArticle": true, "wgAction": "view", "wgUserName": null, "wgUserGroups": ["*"], "wgCategories": ["Java API Compliance Checker"], "wgBreakFrames": false, "wgRestrictionEdit": [], "wgRestrictionMove": []});
 }
 </script><script>if(window.mw){
 	mw.loader.load(["mediawiki.page.startup"]);
@@ -39,7 +39,7 @@
 		<div id="contentSub"></div>
 		
 		<!-- start content -->
-<div lang="en" dir="ltr" class="mw-content-ltr"><p><i>Java API Compliance Checker (Java ACC)</i> is a tool for checking backward binary and source compatibility of a Java library API. The tool checks classes declarations of old and new versions and analyzes changes that may break compatibility: removed methods, removed class fields, added abstract methods, etc. Binary incompatibility may result in crashing or incorrect behavior of existing clients built with an old version of a library when they are running with a new one. Source incompatibility may result in recompilation errors with a new library version. The tool is intended for library developers and operating system maintainers who are interested in ensuring backward compatibility, i.e. allow old clients to run or to be recompiled with newer library versions.
+<div lang="en" dir="ltr" class="mw-content-ltr"><p><i>Java API Compliance Checker (Java ACC)</i> is a tool for checking backward <b>binary</b> and <b>source-level compatibility</b> of a Java library API. The tool checks classes declarations of old and new versions and analyzes changes that may break compatibility: removed methods, removed class fields, added abstract methods, etc. Binary incompatibility may result in crashing or incorrect behavior of existing clients built with an old version of a library when they are running with a new one. Source incompatibility may result in recompilation errors with a new library version. The tool is intended for library developers and operating system maintainers who are interested in ensuring backward compatibility, i.e. allow old clients to run or to be recompiled with newer library versions.
 </p><p>See also:
 </p>
 <ul><li> <a rel="nofollow" class="external text" href="http://upstream-tracker.org/java/">Upstream Tracker</a>
@@ -56,24 +56,28 @@
 <li class="toclevel-2 tocsection-4"><a href="#SVN_.28obsolete.29"><span class="tocnumber">1.3</span> <span class="toctext">SVN (obsolete)</span></a></li>
 </ul>
 </li>
-<li class="toclevel-1 tocsection-5"><a href="#Supported_Platforms"><span class="tocnumber">2</span> <span class="toctext">Supported Platforms</span></a></li>
-<li class="toclevel-1 tocsection-6"><a href="#System_Requirements"><span class="tocnumber">3</span> <span class="toctext">System Requirements</span></a></li>
-<li class="toclevel-1 tocsection-7"><a href="#Detectable_Compatibility_Problems"><span class="tocnumber">4</span> <span class="toctext">Detectable Compatibility Problems</span></a></li>
-<li class="toclevel-1 tocsection-8"><a href="#Limitations"><span class="tocnumber">5</span> <span class="toctext">Limitations</span></a></li>
-<li class="toclevel-1 tocsection-9"><a href="#Usage"><span class="tocnumber">6</span> <span class="toctext">Usage</span></a>
+<li class="toclevel-1 tocsection-5"><a href="#License"><span class="tocnumber">2</span> <span class="toctext">License</span></a></li>
+<li class="toclevel-1 tocsection-6"><a href="#Supported_Platforms"><span class="tocnumber">3</span> <span class="toctext">Supported Platforms</span></a></li>
+<li class="toclevel-1 tocsection-7"><a href="#System_Requirements"><span class="tocnumber">4</span> <span class="toctext">System Requirements</span></a></li>
+<li class="toclevel-1 tocsection-8"><a href="#Detectable_Compatibility_Problems"><span class="tocnumber">5</span> <span class="toctext">Detectable Compatibility Problems</span></a></li>
+<li class="toclevel-1 tocsection-9"><a href="#Limitations"><span class="tocnumber">6</span> <span class="toctext">Limitations</span></a></li>
+<li class="toclevel-1 tocsection-10"><a href="#Installation"><span class="tocnumber">7</span> <span class="toctext">Installation</span></a></li>
+<li class="toclevel-1 tocsection-11"><a href="#Usage"><span class="tocnumber">8</span> <span class="toctext">Usage</span></a>
 <ul>
-<li class="toclevel-2 tocsection-10"><a href="#Compare_Libraries"><span class="tocnumber">6.1</span> <span class="toctext">Compare Libraries</span></a></li>
-<li class="toclevel-2 tocsection-11"><a href="#Check_Clients_Portability"><span class="tocnumber">6.2</span> <span class="toctext">Check Clients Portability</span></a></li>
-<li class="toclevel-2 tocsection-12"><a href="#Dump_Library_API_to_TXT_file"><span class="tocnumber">6.3</span> <span class="toctext">Dump Library API to TXT file</span></a></li>
-<li class="toclevel-2 tocsection-13"><a href="#Command-Line_Options"><span class="tocnumber">6.4</span> <span class="toctext">Command-Line Options</span></a></li>
-<li class="toclevel-2 tocsection-14"><a href="#Examples"><span class="tocnumber">6.5</span> <span class="toctext">Examples</span></a></li>
+<li class="toclevel-2 tocsection-12"><a href="#Compare_Java_ARchives"><span class="tocnumber">8.1</span> <span class="toctext">Compare Java ARchives</span></a></li>
+<li class="toclevel-2 tocsection-13"><a href="#Compare_Libraries"><span class="tocnumber">8.2</span> <span class="toctext">Compare Libraries</span></a></li>
+<li class="toclevel-2 tocsection-14"><a href="#Check_Clients_Portability"><span class="tocnumber">8.3</span> <span class="toctext">Check Clients Portability</span></a></li>
+<li class="toclevel-2 tocsection-15"><a href="#Dump_Library_API_to_TXT_file"><span class="tocnumber">8.4</span> <span class="toctext">Dump Library API to TXT file</span></a></li>
+<li class="toclevel-2 tocsection-16"><a href="#Command-Line_Options"><span class="tocnumber">8.5</span> <span class="toctext">Command-Line Options</span></a></li>
+<li class="toclevel-2 tocsection-17"><a href="#Examples"><span class="tocnumber">8.6</span> <span class="toctext">Examples</span></a></li>
 </ul>
 </li>
-<li class="toclevel-1 tocsection-15"><a href="#Report_Format"><span class="tocnumber">7</span> <span class="toctext">Report Format</span></a></li>
-<li class="toclevel-1 tocsection-16"><a href="#Verdict_on_Compatibility"><span class="tocnumber">8</span> <span class="toctext">Verdict on Compatibility</span></a></li>
-<li class="toclevel-1 tocsection-17"><a href="#Similar_Tools"><span class="tocnumber">9</span> <span class="toctext">Similar Tools</span></a></li>
-<li class="toclevel-1 tocsection-18"><a href="#Maintainers"><span class="tocnumber">10</span> <span class="toctext">Maintainers</span></a></li>
-<li class="toclevel-1 tocsection-19"><a href="#Articles"><span class="tocnumber">11</span> <span class="toctext">Articles</span></a></li>
+<li class="toclevel-1 tocsection-18"><a href="#Report_Format"><span class="tocnumber">9</span> <span class="toctext">Report Format</span></a></li>
+<li class="toclevel-1 tocsection-19"><a href="#Verdict_on_Compatibility"><span class="tocnumber">10</span> <span class="toctext">Verdict on Compatibility</span></a></li>
+<li class="toclevel-1 tocsection-20"><a href="#Error_Codes"><span class="tocnumber">11</span> <span class="toctext">Error Codes</span></a></li>
+<li class="toclevel-1 tocsection-21"><a href="#Similar_Tools"><span class="tocnumber">12</span> <span class="toctext">Similar Tools</span></a></li>
+<li class="toclevel-1 tocsection-22"><a href="#Maintainers"><span class="tocnumber">13</span> <span class="toctext">Maintainers</span></a></li>
+<li class="toclevel-1 tocsection-23"><a href="#Articles"><span class="tocnumber">14</span> <span class="toctext">Articles</span></a></li>
 </ul>
 </td></tr></table>
 <h2> <span class="mw-headline" id="Downloads"> Downloads </span></h2>
@@ -87,7 +91,10 @@
 </p>
 <h3> <span class="mw-headline" id="SVN_.28obsolete.29"> SVN (obsolete) </span></h3>
 <p>Read-only access to the latest development version:<br />
-&#160;&#160;<code style="border: dashed 1px gray; background-color: #f0f0f0;">&#160;svn co <a rel="nofollow" class="external text" href="http://forge.ispras.ru/svn/abi-compliance-checker">http://forge.ispras.ru/svn/java-api-compliance-checker</a>&#160;</code><br />
+&#160;&#160;<code style="border: dashed 1px gray; background-color: #f0f0f0;">&#160;svn co <a rel="nofollow" class="external free" href="http://forge.ispras.ru/svn/java-api-compliance-checker">http://forge.ispras.ru/svn/java-api-compliance-checker</a>&#160;</code><br />
+</p>
+<h2> <span class="mw-headline" id="License"> License </span></h2>
+<p>This program is free software. You may use, redistribute and/or modify it under the terms of either the <b>GNU GPL</b> or <b>LGPL</b>.
 </p>
 <h2> <span class="mw-headline" id="Supported_Platforms"> Supported Platforms </span></h2>
 <p>GNU/Linux, FreeBSD, Mac OS X, MS Windows (Xp, Vista, 7).
@@ -104,40 +111,57 @@
 </li></ul>
 </li></ul>
 <h2> <span class="mw-headline" id="Detectable_Compatibility_Problems"> Detectable Compatibility Problems </span></h2>
-<p>The tool searches for the following list of changes in the API that may break binary/source compatibility:
+<p>The tool searches for the following list of changes in the API that may break <b>binary/source-level</b> compatibility. See <a rel="nofollow" class="external text" href="http://wiki.eclipse.org/Evolving_Java-based_APIs_2">“Evolving Java-based APIs: Achieving API Binary Compatibility”</a> and <a href="http://ispras.linuxfoundation.org/index.php/Java_API_Compliance_Checker#Articles" title="Java API Compliance Checker">this list</a> of articles for more info.
 </p>
-<ul><li> <b>Removed Elements</b> (methods, classes, interfaces)
-</li><li> <b>Problems with Data Types</b>
-<ul><li> <b>Classes</b>
-<ul><li> removed/changed methods
-</li><li> removed/changed fields
-</li><li> added/removed/changed abstract methods
+<ul><li> <b>Problems with Data Types</b>
+<ul><li> <b>Classes</b> and <b>Interfaces</b>
+<ul><li> removed classes or interfaces
+</li><li> removed fields
+</li><li> removed methods
+</li><li> change of a field type
+</li><li> change of a field access level
+</li><li> change of a field attributes (final, static, etc.)
+</li><li> change of a constant field value
+</li><li> changes in fields (recursive analysis)
+</li><li> added/removed abstract methods
 </li><li> added/removed super-interfaces
-</li><li> added/removed super-classes
 </li></ul>
-</li><li> <b>Interfaces</b>
-<ul><li> added/removed/changed abstract methods
-</li><li> removed/changed fields
-</li><li> added/removed/changed super-interfaces
+</li><li> <b>Classes</b>
+<ul><li> added/removed super-classes
+</li><li> moving a method up class hierarchy
+</li><li> overridden methods
 </li></ul>
 </li></ul>
 </li><li> <b>Problems with Methods</b>
-<ul><li> changed attributes
+<ul><li> changed attributes (static, final, synchronized, abstract, etc.)
+</li><li> changed access level
 </li><li> added/removed exceptions
-</li><li> moving a method up class hierarchy
-</li><li> overridden methods
 </li></ul>
 </li><li> <b>Problems with Implementation</b>
 <ul><li> changes in decompiled binary code
 </li></ul>
 </li></ul>
-<p>You can see detailed problem descriptions in the HTML report (see <a rel="nofollow" class="external text" href="http://upstream-tracker.org/java/compat_reports/jdo/2.2_to_3.0/compat_report.html">example</a>) generated by the tool.
+<p><br />
+You can see detailed problem descriptions in the visual interactive HTML-format compatibility report (see <a rel="nofollow" class="external text" href="http://upstream-tracker.org/java/compat_reports/jdo/2.2_to_3.0/compat_report.html">this example</a>) generated by the tool.
 </p>
 <h2> <span class="mw-headline" id="Limitations"> Limitations </span></h2>
 <p>The tool cannot check compatibility problems related to changes in code annotations.
 </p>
+<h2> <span class="mw-headline" id="Installation"> Installation </span></h2>
+<p>The tool is <b>ready-to-use</b> after extracting the archive. You can also use a <b>Makefile</b> to install the tool into the system:<br />
+<code style="border: dashed 1px gray; background-color: #f0f0f0;">&#160;cd japi-compliance-checker-x.y.z/&#160;</code><br /><br />
+<code style="border: dashed 1px gray; background-color: #f0f0f0;">&#160;sudo perl Makefile.pl -install --prefix=PREFIX [/usr, /usr/local, ...]&#160;</code>
+</p><p>This command will install a <code style="border: dashed 1px gray; background-color: #f0f0f0;">&#160;japi-compliance-checker&#160;</code> program in the <code style="border: dashed 1px gray; background-color: #f0f0f0;">&#160;PREFIX/bin&#160;</code> system directory.
+</p>
 <h2> <span class="mw-headline" id="Usage"> Usage </span></h2>
-<p>For using the tool, you should provide the <b><a href="http://ispras.linuxfoundation.org/index.php/Java_Library_Descriptor" title="Java Library Descriptor">XML descriptors</a></b> for two library versions: <b><a href="http://ispras.linuxfoundation.org/index.php/Java_Library_Descriptor" title="Java Library Descriptor">v1.xml</a></b> and <b><a href="http://ispras.linuxfoundation.org/index.php/Java_Library_Descriptor" title="Java Library Descriptor">v2.xml</a></b> files. Library descriptor is a simple XML-file that specifies version number, paths to Java ARchives and other optional information. An example of the descriptor is the following (1.0.xml):
+<h3> <span class="mw-headline" id="Compare_Java_ARchives"> Compare Java ARchives </span></h3>
+<p>Command to compare two java archives:<br />
+&#160;&#160;<code style="border: dashed 1px gray; background-color: #f0f0f0;">&#160;japi-compliance-checker -l <i>&lt;library_name&gt;</i> -old <i>&lt;v1.jar&gt;</i> -new <i>&lt;v2.jar&gt;</i>&#160;</code><br /><br />
+</p><p>The compatibility report will be generated to:<br />
+&#160;&#160;<code style="border: dashed 1px gray; background-color: #f0f0f0;">&#160;compat_reports/<i>&lt;library_name&gt;</i>/<i>&lt;v1&gt;</i>_to_<i>&lt;v2&gt;</i>/compat_report.html&#160;</code>
+</p>
+<h3> <span class="mw-headline" id="Compare_Libraries"> Compare Libraries </span></h3>
+<p>To compare different versions of a library that consists of many JARs  you should create <b><a href="http://ispras.linuxfoundation.org/index.php/Java_Library_Descriptor" title="Java Library Descriptor">XML descriptors</a></b> for two library versions: <b><a href="http://ispras.linuxfoundation.org/index.php/Java_Library_Descriptor" title="Java Library Descriptor">v1.xml</a></b> and <b><a href="http://ispras.linuxfoundation.org/index.php/Java_Library_Descriptor" title="Java Library Descriptor">v2.xml</a></b> files. Library descriptor is a simple XML-file that specifies version number, paths to Java ARchives and other optional information. An example of the descriptor is the following (1.0.xml):
 </p>
 <pre> <span style="color:Green;">&lt;version&gt;</span>
      1.0
@@ -149,17 +173,14 @@
        ...
  <span style="color:Green;">&lt;/archives&gt;</span>
 </pre>
-<h3> <span class="mw-headline" id="Compare_Libraries"> Compare Libraries </span></h3>
 <p>Command to compare two versions of a library:<br />
 &#160;&#160;<code style="border: dashed 1px gray; background-color: #f0f0f0;">&#160;japi-compliance-checker -l <i>&lt;library_name&gt;</i> -old <i>&lt;<a href="http://ispras.linuxfoundation.org/index.php/Java_Library_Descriptor" title="Java Library Descriptor">v1.xml</a>&gt;</i> -new <i>&lt;<a href="http://ispras.linuxfoundation.org/index.php/Java_Library_Descriptor" title="Java Library Descriptor">v2.xml</a>&gt;</i>&#160;</code><br /><br />
-</p><p>Short command to compare two single <b>JARs</b>:<br />
-&#160;&#160;<code style="border: dashed 1px gray; background-color: #f0f0f0;">&#160;japi-compliance-checker -l <i>&lt;library_name&gt;</i> -old <i>&lt;v1.jar&gt;</i> -new <i>&lt;v2.jar&gt;</i>&#160;</code><br /><br />
 </p><p>The compatibility report will be generated to:<br />
 &#160;&#160;<code style="border: dashed 1px gray; background-color: #f0f0f0;">&#160;compat_reports/<i>&lt;library_name&gt;</i>/<i>&lt;v1&gt;</i>_to_<i>&lt;v2&gt;</i>/compat_report.html&#160;</code>
 </p>
 <h3> <span class="mw-headline" id="Check_Clients_Portability"> Check Clients Portability </span></h3>
 <p>Command to check a client portability to a newer version of a Java library API:<br />
-&#160;&#160;<code style="border: dashed 1px gray; background-color: #f0f0f0;">&#160;japi-compliance-checker -l <i>&lt;library_name&gt;</i> -old <i>&lt;v1.xml&gt;</i> -new <i>&lt;v2.xml&gt;</i> -client <i>&lt;client.jar&gt;</i>&#160;</code>
+&#160;&#160;<code style="border: dashed 1px gray; background-color: #f0f0f0;">&#160;japi-compliance-checker -l <i>&lt;library_name&gt;</i> -old <i>&lt;<a href="http://ispras.linuxfoundation.org/index.php/Java_Library_Descriptor" title="Java Library Descriptor">v1.xml</a>&gt;</i> -new <i>&lt;<a href="http://ispras.linuxfoundation.org/index.php/Java_Library_Descriptor" title="Java Library Descriptor">v2.xml</a>&gt;</i> -client <i>&lt;client.jar&gt;</i>&#160;</code>
 </p>
 <h3> <span class="mw-headline" id="Dump_Library_API_to_TXT_file"> Dump Library API to TXT file </span></h3>
 <p>Command to dump a Java library API to gzipped TXT format file:<br />
@@ -172,34 +193,84 @@ The API dump will be generated to:<br />
 </p>
 <h3> <span class="mw-headline" id="Examples"> Examples </span></h3>
 <p>Check the JDO library API versions for compatibility:<br />
-&#160;&#160;<code style="border: dashed 1px gray; background-color: #f0f0f0;">&#160;japi-compliance-checker -l <b>jdo</b> -old <b>jdo-api-2.0.jar</b> -new <b>jdo-api-3.0.jar</b>&#160;</code><br />
+&#160;&#160;<code style="border: dashed 1px gray; background-color: #f0f0f0;">&#160;japi-compliance-checker -l jdo -old jdo-api-2.0.jar -new jdo-api-3.0.jar&#160;</code><br /><br />
 The report will be generated to:<br />
 &#160;&#160;<code style="border: dashed 1px gray; background-color: #f0f0f0;">&#160;compat_reports/jdo/2.0_to_3.0/compat_report.html&#160;</code><br /><br />
 Dump library API:<br />
-&#160;&#160;<code style="border: dashed 1px gray; background-color: #f0f0f0;">&#160;japi-compliance-checker -l <b>jdo</b> -dump <b>jdo-api-2.0.jar</b>&#160;</code><br />
+&#160;&#160;<code style="border: dashed 1px gray; background-color: #f0f0f0;">&#160;japi-compliance-checker -l jdo -dump jdo-api-2.0.jar&#160;</code><br /><br />
 The API dump will be generated to:<br />
 &#160;&#160;<code style="border: dashed 1px gray; background-color: #f0f0f0;">&#160;api_dumps/jdo/jdo_2.0.api.tar.gz&#160;</code><br /><br />
-Check client (Teller.jar) portability between JDO versions:<br />
-&#160;&#160;<code style="border: dashed 1px gray; background-color: #f0f0f0;">&#160;japi-compliance-checker -l <b>jdo</b> -old <b>jdo-api-2.0.jar</b> -new <b>jdo-api-3.0.jar</b> -client <b>Teller.jar</b>&#160;</code><br />
+Check client application portability between JDO versions:<br />
+&#160;&#160;<code style="border: dashed 1px gray; background-color: #f0f0f0;">&#160;japi-compliance-checker -l jdo -old jdo-api-2.0.jar -new jdo-api-3.0.jar -client Teller.jar&#160;</code><br />
 </p>
 <h2> <span class="mw-headline" id="Report_Format"> Report Format </span></h2>
 <p>The HTML-format compatibility report consists of:
 </p>
-<ul><li> <b>Summary</b> - Verdict on compatibility. Number of archives, classes and methods checked by the tool.
+<ul><li> <b>Test Info</b> - The library name and compared version numbers.
+</li><li> <b>Summary</b> - Verdict on compatibility. Number of archives, classes and methods checked by the tool.
 </li><li> <b>Problem Summary</b> - Classification of compatibility problems.
-</li><li> <b>Added Methods</b> - List of added methods.
-</li><li> <b>Removed Methods</b> - List of removed methods.
-</li><li> <b>Problems with Data Types</b> - List of compatibility problems caused by changes in data types (divided by the level of risk: High, Medium, Low). List of affected methods.
-</li><li> <b>Problems with Methods</b> - List of compatibility problems caused by changes in method parameters and attributes (divided by the level of risk).
-</li><li> <b>Problems with Implementation</b> - List of changes in decompiled binary code. Use <a href="http://ispras.linuxfoundation.org/index.php/Java_API_Compliance_Checker_Options#Extra_Options" title="Java API Compliance Checker Options">-check-implementation</a> option to enable this section.
+</li><li> <b>Added Methods</b> - The list of added methods.
+</li><li> <b>Removed Methods</b> - The list of removed methods.
+</li><li> <b>Problems with Data Types</b> - List of compatibility problems caused by changes in data types (divided by the severity level: High, Medium, Low). List of affected methods.
+</li><li> <b>Problems with Methods</b> - The list of compatibility problems caused by changes in method parameters and attributes (divided by the severity level).
+</li><li> <b>Other Changes in Data Types</b> - The list of compatible changes in data types;
+</li><li> <b>Other Changes in Methods</b> - The list of compatible changes in methods;
+</li><li> <b>Problems with Implementation</b> - The list of changes in decompiled binary code. Use <a href="http://ispras.linuxfoundation.org/index.php/Java_API_Compliance_Checker_Options#Extra_Options" title="Java API Compliance Checker Options">-check-implementation</a> option to enable this section.
 </li></ul>
 <p>Examples:
 </p>
 <ul><li> JDO: 2.2 to 3.0 compatibility <a rel="nofollow" class="external text" href="http://upstream-tracker.org/java/compat_reports/jdo/2.2_to_3.0/compat_report.html">report</a>
 </li></ul>
 <h2> <span class="mw-headline" id="Verdict_on_Compatibility"> Verdict on Compatibility </span></h2>
-<p>If the tool detected problems with high or medium level of severity or at least one removed symbol then the compatibility verdict is <b>incompatible</b> (otherwise <b>compatible</b>). Low-severity problems can be considered as <b>warnings</b> and don't affect the compatibility verdict unless the <a href="http://ispras.linuxfoundation.org/index.php/Java_API_Compliance_Checker_Options" title="Java API Compliance Checker Options">-strict</a> option is specified.
+<p>If the tool detected problems with high or medium level of severity or at least one removed method then the compatibility verdict is <b>incompatible</b> (otherwise <b>compatible</b>). Low-severity problems can be considered as <b>warnings</b> and don't affect the compatibility verdict unless the <a href="http://ispras.linuxfoundation.org/index.php/Java_API_Compliance_Checker_Options" title="Java API Compliance Checker Options">-strict</a> option is specified.
 </p>
+<h2> <span class="mw-headline" id="Error_Codes"> Error Codes </span></h2>
+<table class="wikitable">
+<tr>
+<th> Code
+</th>
+<th> Meaning
+</th></tr>
+<tr align="left">
+<td> 0
+</td>
+<td> Compatible. The tool has run without any errors.
+</td></tr>
+<tr align="left">
+<td> 1
+</td>
+<td> Incompatible. The tool has run without any errors.
+</td></tr>
+<tr align="left">
+<td> 2
+</td>
+<td> Common error code (undifferentiated).
+</td></tr>
+<tr align="left">
+<td> 3
+</td>
+<td> A system command is not found.
+</td></tr>
+<tr align="left">
+<td> 4
+</td>
+<td> Cannot access input files.
+</td></tr>
+<tr align="left">
+<td> 7
+</td>
+<td> Invalid input ABI dump.
+</td></tr>
+<tr align="left">
+<td> 8
+</td>
+<td> Unsupported version of input ABI dump.
+</td></tr>
+<tr align="left">
+<td> 9
+</td>
+<td> Cannot find a module.
+</td></tr></table>
 <h2> <span class="mw-headline" id="Similar_Tools">  Similar Tools </span></h2>
 <ol><li> <b>SigTest</b> - Oracle's SigTest signature testing and API conformance tool
 </li><li> <b>Clirr</b> - checks Java libraries for binary and source compatibility with older releases
@@ -218,11 +289,11 @@ Check client (Teller.jar) portability between JDO versions:<br />
 
 <!-- 
 NewPP limit report
-Preprocessor node count: 92/1000000
+Preprocessor node count: 113/1000000
 Post-expand include size: 0/2097152 bytes
 Template argument size: 0/2097152 bytes
 Expensive parser function count: 0/100
 -->
 
-<!-- Saved in parser cache with key rasispdb:pcache:idhash:2598-0!*!0!!en!*!* and timestamp 20120413074713 -->
+<!-- Saved in parser cache with key rasispdb:pcache:idhash:2598-0!*!0!!en!*!* and timestamp 20120414165124 -->
 </div></div></div></div></div></body></html>
