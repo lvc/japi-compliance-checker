@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 ###########################################################################
-# Java API Compliance Checker (Java ACC) 1.1
+# Java API Compliance Checker (Java ACC) 1.1.1
 # A tool for checking backward compatibility of a Java library API
 #
 # Copyright (C) 2011 Russian Linux Verification Center
@@ -16,11 +16,11 @@
 # ============
 #  Linux, FreeBSD, Mac OS X
 #    - JDK (javap, javac)
-#    - Perl (5.8-5.14)
+#    - Perl (5.8 or newer)
 #
 #  MS Windows
 #    - JDK (javap, javac)
-#    - Active Perl (5.8-5.14)
+#    - Active Perl (5.8 or newer)
 #  
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License or the GNU Lesser
@@ -44,7 +44,7 @@ use Cwd qw(abs_path cwd);
 use Data::Dumper;
 use Config;
 
-my $TOOL_VERSION = "1.1";
+my $TOOL_VERSION = "1.1.1";
 my $API_DUMP_VERSION = "1.0";
 my $API_DUMP_MAJOR = majorVersion($API_DUMP_VERSION);
 
@@ -52,7 +52,7 @@ my ($Help, $ShowVersion, %Descriptor, $TargetLibraryName, $CheckSeparately,
 $GenerateDescriptor, $TestSystem, $DumpAPI, $ClassListPath, $ClientPath,
 $StrictCompat, $DumpVersion, $BinaryOnly, $TargetLibraryFullName, $CheckImpl,
 %TargetVersion, $SourceOnly, $ShortMode, $KeepInternal, $OutputReportPath,
-$BinaryReportPath, $SourceReportPath, $Browse, $Debug, $Quick);
+$BinaryReportPath, $SourceReportPath, $Browse, $Debug, $Quick, $SortDump);
 
 my $CmdName = get_filename($0);
 my $OSgroup = get_OSgroup();
@@ -146,6 +146,7 @@ GetOptions("h|help!" => \$Help,
   "bin-report-path=s" => \$BinaryReportPath,
   "src-report-path=s" => \$SourceReportPath,
   "quick!" => \$Quick,
+  "sort!" => \$SortDump,
 #other options
   "test!" => \$TestSystem,
   "debug!" => \$Debug,
@@ -320,6 +321,9 @@ EXTRA OPTIONS:
         - analysis of method parameter names
         - analysis of class field values
         - analysis of usage of added abstract methods
+
+  -sort
+      Enable sorting of data in API dumps.
 
 OTHER OPTIONS:
   -test
@@ -646,60 +650,52 @@ sub get_CmdPath($)
     my $Name = $_[0];
     return "" if(not $Name);
     return $Cache{"get_CmdPath"}{$Name} if(defined $Cache{"get_CmdPath"}{$Name});
-    if(my $DefaultPath = get_CmdPath_Default($Name))
-    {
-        $Cache{"get_CmdPath"}{$Name} = $DefaultPath;
-        return $Cache{"get_CmdPath"}{$Name};
+    if(my $DefaultPath = get_CmdPath_Default($Name)) {
+        return ($Cache{"get_CmdPath"}{$Name} = $DefaultPath);
     }
     foreach my $Path (sort {length($a)<=>length($b)} keys(%{$SystemPaths{"bin"}}))
     {
         if(-f $Path."/".$Name or -f $Path."/".$Name.".exe") {
-            $Cache{"get_CmdPath"}{$Name} = joinPath($Path,$Name);
-            return $Cache{"get_CmdPath"}{$Name};
+            return ($Cache{"get_CmdPath"}{$Name} = joinPath($Path,$Name));
         }
     }
-    $Cache{"get_CmdPath"}{$Name} = "";
-    return "";
+    return ($Cache{"get_CmdPath"}{$Name} = "");
 }
 
 sub get_CmdPath_Default($)
-{# search in PATH
+{ # search in PATH
     my $Name = $_[0];
     return "" if(not $Name);
-    return $Cache{"get_CmdPath_Default"}{$Name} if(defined $Cache{"get_CmdPath_Default"}{$Name});
+    if(defined $Cache{"get_CmdPath_Default"}{$Name}) {
+        return $Cache{"get_CmdPath_Default"}{$Name};
+    }
     if($Name eq "find")
-    {# special case: search for "find" utility
+    { # special case: search for "find" utility
         if(`find . -maxdepth 0 2>$TMP_DIR/null`) {
-            $Cache{"get_CmdPath_Default"}{$Name} = "find";
-            return "find";
+            return ($Cache{"get_CmdPath_Default"}{$Name} = "find");
         }
     }
     if(get_version($Name)) {
-        $Cache{"get_CmdPath_Default"}{$Name} = $Name;
-        return $Name;
+        return ($Cache{"get_CmdPath_Default"}{$Name} = $Name);
     }
     if($OSgroup eq "windows"
     and `$Name /? 2>$TMP_DIR/null`) {
-        $Cache{"get_CmdPath_Default"}{$Name} = $Name;
-        return $Name;
+        return ($Cache{"get_CmdPath_Default"}{$Name} = $Name);
     }
-    if($Name ne "which") {
+    if($Name ne "which")
+    {
         my $WhichCmd = get_CmdPath("which");
-        if($WhichCmd and `$WhichCmd $Name 2>$TMP_DIR/null`)
-        {
-            $Cache{"get_CmdPath_Default"}{$Name} = $Name;
-            return $Cache{"get_CmdPath_Default"}{$Name};
+        if($WhichCmd and `$WhichCmd $Name 2>$TMP_DIR/null`) {
+            return ($Cache{"get_CmdPath_Default"}{$Name} = $Name);
         }
     }
     foreach my $Path (sort {length($a)<=>length($b)} keys(%DefaultBinPaths))
     {
         if(-f $Path."/".$Name or -f $Path."/".$Name.".exe") {
-            $Cache{"get_CmdPath_Default"}{$Name} = joinPath($Path,$Name);
-            return $Cache{"get_CmdPath_Default"}{$Name};
+            return ($Cache{"get_CmdPath_Default"}{$Name} = joinPath($Path,$Name));
         }
     }
-    $Cache{"get_CmdPath_Default"}{$Name} = "";
-    return "";
+    return ($Cache{"get_CmdPath_Default"}{$Name} = "");
 }
 
 sub showPos($)
@@ -793,8 +789,7 @@ sub parseTag($$)
         $Content=~s/(\A\s+|\s+\Z)//g;
         return $Content;
     }
-    else
-    {
+    else {
         return "";
     }
 }
@@ -819,24 +814,28 @@ sub cut_path_prefix($$)
 }
 
 sub get_filename($)
-{# much faster than basename() from File::Basename module
-    return $Cache{"get_filename"}{$_[0]} if($Cache{"get_filename"}{$_[0]});
-    if($_[0]=~/([^\/\\]+)\Z/) {
-        return ($Cache{"get_filename"}{$_[0]} = $1);
+{ # much faster than basename() from File::Basename module
+    if(defined $Cache{"get_filename"}{$_[0]}) {
+        return $Cache{"get_filename"}{$_[0]};
     }
-    return "";
+    if($_[0] and $_[0]=~/([^\/\\]+)[\/\\]*\Z/) {
+        return ($Cache{"get_filename"}{$_[0]}=$1);
+    }
+    return ($Cache{"get_filename"}{$_[0]}="");
 }
 
 sub get_dirname($)
-{# much faster than dirname() from File::Basename module
-    if($_[0]=~/\A(.*)[\/\\]+([^\/\\]*)\Z/) {
-        return $1;
+{ # much faster than dirname() from File::Basename module
+    if(defined $Cache{"get_dirname"}{$_[0]}) {
+        return $Cache{"get_dirname"}{$_[0]};
     }
-    return "";
+    if($_[0] and $_[0]=~/\A(.*?)[\/\\]+[^\/\\]*[\/\\]*\Z/) {
+        return ($Cache{"get_dirname"}{$_[0]}=$1);
+    }
+    return ($Cache{"get_dirname"}{$_[0]}="");
 }
 
-sub separate_path($)
-{
+sub separate_path($) {
     return (get_dirname($_[0]), get_filename($_[0]));
 }
 
@@ -895,17 +894,6 @@ sub get_Signature($$$)
 sub joinPath($$)
 {
     return join($SLASH, @_);
-}
-
-sub get_filter_cmd($$)
-{
-    my ($Path, $Filter) = @_;
-    if($OSgroup eq "windows") {
-        return "type $Path | find \"$Filter\"";
-    }
-    else {
-        return "cat $Path | grep \"$Filter\"";
-    }
 }
 
 sub get_abs_path($)
@@ -1888,8 +1876,10 @@ sub get_Type($$)
 sub methodFilter($$)
 {
     my ($Method, $LibVersion) = @_;
-    if($ClassListPath and defined $MethodInfo{$LibVersion}{$Method}
-    and not $ClassList_User{$MethodInfo{$LibVersion}{$Method}{"Class"}})
+    my $CName = get_TypeName($MethodInfo{$LibVersion}{$Method}{"Class"}, $LibVersion);
+    my $Package = $MethodInfo{$LibVersion}{$Method}{"Package"};
+    if($ClassListPath
+    and not $ClassList_User{$CName})
     { # user defined classes
         return 0;
     }
@@ -1897,7 +1887,7 @@ sub methodFilter($$)
     { # user defined application
         return 0;
     }
-    if(skip_package($MethodInfo{$LibVersion}{$Method}{"Package"}, $LibVersion))
+    if(skip_package($Package, $LibVersion))
     { # internal packages
         return 0;
     }
@@ -2737,19 +2727,13 @@ sub get_Report_Header($)
 
 sub get_SourceInfo()
 {
-    my $CheckedClasses = "<a name='Checked_Classes'></a><h2>Classes (".keys(%{$LibClasses{1}}).")</h2>";
-    $CheckedClasses .= "<hr/><div class='class_list'>\n";
-    foreach my $Class_Path (keys(%{$LibClasses{1}})) {
-        $CheckedClasses .= $LibClasses{1}{$Class_Path}.".".get_filename($Class_Path)."<br/>\n";
-    }
-    $CheckedClasses .= "</div><br/>$TOP_REF<br/>\n";
     my $CheckedArchives = "<a name='Checked_Archives'></a><h2>Java ARchives (".keys(%{$LibArchives{1}}).")</h2>\n";
     $CheckedArchives .= "<hr/><div class='jar_list'>\n";
     foreach my $ArchivePath (sort {lc($a) cmp lc($b)}  keys(%{$LibArchives{1}})) {
         $CheckedArchives .= get_filename($ArchivePath)."<br/>\n";
     }
     $CheckedArchives .= "</div><br/>$TOP_REF<br/>\n";
-    return $CheckedArchives.$CheckedClasses;
+    return $CheckedArchives;
 }
 
 sub get_TypeProblems_Count($$$)
@@ -2974,11 +2958,7 @@ sub get_Summary($)
     $Checked_Archives_Link = "<a href='#Checked_Archives' style='color:Blue;'>".keys(%{$LibArchives{1}})."</a>" if(keys(%{$LibArchives{1}})>0);
     $TestResults .= "<tr><th>Total Java ARchives</th><td>$Checked_Archives_Link</td></tr>";
     
-    my $Checked_Classes_Link = "0";
-    $Checked_Classes_Link = "<a href='#Checked_Classes' style='color:Blue;'>".keys(%{$LibClasses{1}})."</a>" if(keys(%{$LibClasses{1}})>0);
-    $TestResults .= "<tr><th>Total Classes</th><td>$Checked_Classes_Link</td></tr>";
-    
-    $TestResults .= "<tr><th>Total Methods / Types</th><td>".keys(%CheckedMethods)." / ".keys(%CheckedTypes)."</td></tr>";
+    $TestResults .= "<tr><th>Total Methods / Classes</th><td>".keys(%CheckedMethods)." / ".keys(%{$LibClasses{1}})."</td></tr>"; # keys(%CheckedTypes)
     
     my $Verdict = "";
     $RESULT{$Level}{"Problems"} += $Removed+$M_Problems_High+$T_Problems_High+$T_Problems_Medium+$M_Problems_Medium;
@@ -5799,13 +5779,18 @@ sub registerType($$)
     if($TName_Tid{$LibVersion}{$TName}) {
         return $TName_Tid{$LibVersion}{$TName};
     }
-    if(not $TName_Tid{$LibVersion}{$TName}) {
-        $TName_Tid{$LibVersion}{$TName} = ++$TypeID;
+    if(not $TName_Tid{$LibVersion}{$TName})
+    {
+        if(my $ID = ++$TypeID) {
+            $TName_Tid{$LibVersion}{$TName} = "$ID";
+        }
     }
     my $Tid = $TName_Tid{$LibVersion}{$TName};
     $TypeInfo{$LibVersion}{$Tid}{"Name"} = $TName;
-    if($TName=~/(.+)\[\]\Z/) {
-        if(my $BaseTypeId = registerType($1, $LibVersion)) {
+    if($TName=~/(.+)\[\]\Z/)
+    {
+        if(my $BaseTypeId = registerType($1, $LibVersion))
+        {
             $TypeInfo{$LibVersion}{$Tid}{"BaseType"} = $BaseTypeId;
             $TypeInfo{$LibVersion}{$Tid}{"Type"} = "array";
         }
@@ -6383,12 +6368,12 @@ sub read_API_Dump($$)
     return if(not $LibVersion or not -e $Path);
     my $FileName = unpackDump($Path);
     if($FileName!~/\.api\Z/) {
-        exitStatus("Invalid_Dump", "specified ABI dump \'$Path\' is not valid, try to recreate it");
+        exitStatus("Invalid_Dump", "specified API dump \'$Path\' is not valid, try to recreate it");
     }
     my $Content = readFile($FileName);
     unlink($FileName);
     if($Content!~/};\s*\Z/) {
-        exitStatus("Invalid_Dump", "specified ABI dump \'$Path\' is not valid, try to recreate it");
+        exitStatus("Invalid_Dump", "specified API dump \'$Path\' is not valid, try to recreate it");
     }
     my $LibraryAPI = eval($Content);
     if(not $LibraryAPI) {
@@ -6397,7 +6382,7 @@ sub read_API_Dump($$)
     my $DumpVersion = $LibraryAPI->{"API_DUMP_VERSION"};
     if(majorVersion($DumpVersion) ne $API_DUMP_MAJOR)
     { # compatible with the dumps of the same major version
-        exitStatus("Dump_Version", "incompatible version $DumpVersion of specified ABI dump (allowed only $API_DUMP_MAJOR.0<=V<=$API_DUMP_MAJOR.9)");
+        exitStatus("Dump_Version", "incompatible version $DumpVersion of specified API dump (allowed only $API_DUMP_MAJOR.0<=V<=$API_DUMP_MAJOR.9)");
     }
     $TypeInfo{$LibVersion} = $LibraryAPI->{"TypeInfo"};
     foreach my $TypeId (keys(%{$TypeInfo{$LibVersion}}))
@@ -6473,8 +6458,10 @@ sub get_version($)
 
 sub get_depth($)
 {
-    return $Cache{"get_depth"}{$_[0]} if(defined $Cache{"get_depth"}{$_[0]});
-    return ($Cache{"get_depth"}{$_[0]} = ($_[0]=~tr![/\]|::!!));
+    if(defined $Cache{"get_depth"}{$_[0]}) {
+        return $Cache{"get_depth"}{$_[0]}
+    }
+    return ($Cache{"get_depth"}{$_[0]} = ($_[0]=~tr![\/\\]|\:\:!!));
 }
 
 sub show_time_interval($)
@@ -6839,7 +6826,7 @@ sub createArchive($$)
         if($?)
         { # cannot allocate memory (or other problems with "zip")
             unlink($Path);
-            exitStatus("Error", "can't pack the ABI dump: ".$!);
+            exitStatus("Error", "can't pack the API dump: ".$!);
         }
         chdir($ORIG_DIR);
         unlink($Path);
@@ -6862,7 +6849,7 @@ sub createArchive($$)
         if($?)
         { # cannot allocate memory (or other problems with "tar")
             unlink($Path);
-            exitStatus("Error", "can't pack the ABI dump: ".$!);
+            exitStatus("Error", "can't pack the API dump: ".$!);
         }
         chdir($ORIG_DIR);
         unlink($Path);
@@ -6905,8 +6892,11 @@ sub scenario()
     $Data::Dumper::Sortkeys = 1;
     
     # FIXME: can't pass \&dump_sorting - cause a segfault sometimes
-    # $Data::Dumper::Useperl = 1;
-    # $Data::Dumper::Sortkeys = \&dump_sorting;
+    if($SortDump)
+    {
+        $Data::Dumper::Useperl = 1;
+        $Data::Dumper::Sortkeys = \&dump_sorting;
+    }
     
     detect_default_paths();
     if(defined $TestSystem) {
@@ -6969,8 +6959,10 @@ sub scenario()
         if(not -f $ClassListPath) {
             exitStatus("Access_Error", "can't access file \'$ClassListPath\'");
         }
-        foreach my $Method (split(/\n/, readFile($ClassListPath))) {
-            $ClassList_User{$Method} = 1;
+        foreach my $Class (split(/\n/, readFile($ClassListPath)))
+        {
+            $Class=~s/\//./g;
+            $ClassList_User{$Class} = 1;
         }
     }
     if($ClientPath)
@@ -7024,7 +7016,7 @@ sub scenario()
         mkpath($DDir);
         writeFile($DPath, Dumper(\%LibraryAPI));
         if(not -s $DPath) {
-            exitStatus("Error", "can't create ABI dump because something is going wrong with the Data::Dumper module");
+            exitStatus("Error", "can't create API dump because something is going wrong with the Data::Dumper module");
         }
         my $Pkg = createArchive($DPath, $DDir);
         print "library API has been dumped to:\n  $Pkg\n";

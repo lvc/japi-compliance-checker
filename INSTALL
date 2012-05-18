@@ -7,8 +7,8 @@ All rights reserved.
 RELEASE INFORMATION
 
 Project:           Java API Compliance Checker (Java ACC)
-Version:           1.1
-Date:              2012-04-16
+Version:           1.1.1
+Date:              2012-05-18
 
 
 This INSTALL.txt file explains how to install and setup environment
@@ -28,7 +28,7 @@ Content:
 ===============================================
 
    1. JDK (javap, javac)
-   2. Perl (5.8-5.14)
+   2. Perl (5.8 or newer)
 
 
 
@@ -36,7 +36,7 @@ Content:
 ==============================
 
    1. Java Development Kit (javap, javac)
-   2. Active Perl (5.8-5.14)
+   2. Active Perl (5.8 or newer)
 
 
 
