@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 ###########################################################################
-# Java API Compliance Checker (Java ACC) 1.1.1
+# Java API Compliance Checker (Java ACC) 1.1.2
 # A tool for checking backward compatibility of a Java library API
 #
 # Copyright (C) 2011 Russian Linux Verification Center
@@ -44,7 +44,7 @@ use Cwd qw(abs_path cwd);
 use Data::Dumper;
 use Config;
 
-my $TOOL_VERSION = "1.1.1";
+my $TOOL_VERSION = "1.1.2";
 my $API_DUMP_VERSION = "1.0";
 my $API_DUMP_MAJOR = majorVersion($API_DUMP_VERSION);
 
@@ -52,7 +52,8 @@ my ($Help, $ShowVersion, %Descriptor, $TargetLibraryName, $CheckSeparately,
 $GenerateDescriptor, $TestSystem, $DumpAPI, $ClassListPath, $ClientPath,
 $StrictCompat, $DumpVersion, $BinaryOnly, $TargetLibraryFullName, $CheckImpl,
 %TargetVersion, $SourceOnly, $ShortMode, $KeepInternal, $OutputReportPath,
-$BinaryReportPath, $SourceReportPath, $Browse, $Debug, $Quick, $SortDump);
+$BinaryReportPath, $SourceReportPath, $Browse, $Debug, $Quick, $SortDump,
+$OpenReport);
 
 my $CmdName = get_filename($0);
 my $OSgroup = get_OSgroup();
@@ -151,7 +152,8 @@ GetOptions("h|help!" => \$Help,
   "test!" => \$TestSystem,
   "debug!" => \$Debug,
   "l-full|lib-full=s" => \$TargetLibraryFullName,
-  "b|browse=s" => \$Browse
+  "b|browse=s" => \$Browse,
+  "open!" => \$OpenReport
 ) or ERR_MESSAGE();
 
 sub ERR_MESSAGE()
@@ -344,6 +346,9 @@ OTHER OPTIONS:
 
   -b|-browse <program>
       Open report(s) in the browser (firefox, opera, etc.).
+
+  -open
+      Open report(s) in the default browser.
 
 REPORT:
     Compatibility report will be generated to:
@@ -649,53 +654,82 @@ sub get_CmdPath($)
 {
     my $Name = $_[0];
     return "" if(not $Name);
-    return $Cache{"get_CmdPath"}{$Name} if(defined $Cache{"get_CmdPath"}{$Name});
+    if(defined $Cache{"get_CmdPath"}{$Name}) {
+        return $Cache{"get_CmdPath"}{$Name};
+    }
+    my $Path = search_Cmd($Name);
+    if(not $Path and $OSgroup eq "windows")
+    { # search for *.exe file
+        $Path=search_Cmd($Name.".exe");
+    }
+    if($Path=~/\s/) {
+        $Path = "\"".$Path."\"";
+    }
+    return ($Cache{"get_CmdPath"}{$Name} = $Path);
+}
+
+sub search_Cmd($)
+{
+    my $Name = $_[0];
+    return "" if(not $Name);
+    if(defined $Cache{"search_Cmd"}{$Name}) {
+        return $Cache{"search_Cmd"}{$Name};
+    }
     if(my $DefaultPath = get_CmdPath_Default($Name)) {
-        return ($Cache{"get_CmdPath"}{$Name} = $DefaultPath);
+        return ($Cache{"search_Cmd"}{$Name} = $DefaultPath);
     }
     foreach my $Path (sort {length($a)<=>length($b)} keys(%{$SystemPaths{"bin"}}))
     {
         if(-f $Path."/".$Name or -f $Path."/".$Name.".exe") {
-            return ($Cache{"get_CmdPath"}{$Name} = joinPath($Path,$Name));
+            return ($Cache{"search_Cmd"}{$Name} = joinPath($Path,$Name));
         }
     }
-    return ($Cache{"get_CmdPath"}{$Name} = "");
+    return ($Cache{"search_Cmd"}{$Name} = "");
 }
 
 sub get_CmdPath_Default($)
 { # search in PATH
-    my $Name = $_[0];
-    return "" if(not $Name);
-    if(defined $Cache{"get_CmdPath_Default"}{$Name}) {
-        return $Cache{"get_CmdPath_Default"}{$Name};
+    return "" if(not $_[0]);
+    if(defined $Cache{"get_CmdPath_Default"}{$_[0]}) {
+        return $Cache{"get_CmdPath_Default"}{$_[0]};
     }
-    if($Name eq "find")
+    return ($Cache{"get_CmdPath_Default"}{$_[0]} = get_CmdPath_Default_I($_[0]));
+}
+
+sub get_CmdPath_Default_I($)
+{ # search in PATH
+    my $Name = $_[0];
+    if($Name=~/find/)
     { # special case: search for "find" utility
-        if(`find . -maxdepth 0 2>$TMP_DIR/null`) {
-            return ($Cache{"get_CmdPath_Default"}{$Name} = "find");
+        if(`find \"$TMP_DIR\" -maxdepth 0 2>\"$TMP_DIR/null\"`) {
+            return "find";
         }
     }
     if(get_version($Name)) {
-        return ($Cache{"get_CmdPath_Default"}{$Name} = $Name);
+        return $Name;
     }
-    if($OSgroup eq "windows"
-    and `$Name /? 2>$TMP_DIR/null`) {
-        return ($Cache{"get_CmdPath_Default"}{$Name} = $Name);
-    }
-    if($Name ne "which")
+    if($OSgroup eq "windows")
     {
-        my $WhichCmd = get_CmdPath("which");
-        if($WhichCmd and `$WhichCmd $Name 2>$TMP_DIR/null`) {
-            return ($Cache{"get_CmdPath_Default"}{$Name} = $Name);
+        if(`$Name /? 2>\"$TMP_DIR/null\"`) {
+            return $Name;
+        }
+    }
+    if($Name!~/which/)
+    {
+        if(my $WhichCmd = get_CmdPath("which"))
+        {
+            if(`$WhichCmd $Name 2>\"$TMP_DIR/null\"`) {
+                return $Name;
+            }
         }
     }
     foreach my $Path (sort {length($a)<=>length($b)} keys(%DefaultBinPaths))
     {
-        if(-f $Path."/".$Name or -f $Path."/".$Name.".exe") {
-            return ($Cache{"get_CmdPath_Default"}{$Name} = joinPath($Path,$Name));
+        if(-f $Path."/".$Name) {
+            return joinPath($Path,$Name);
         }
     }
-    return ($Cache{"get_CmdPath_Default"}{$Name} = "");
+    return "";
 }
 
 sub showPos($)
@@ -941,7 +975,7 @@ sub cmd_find($$$$)
             }
         }
         else {
-            @Files = split(/\n/, `$Cmd 2>$TMP_DIR/null`);
+            @Files = split(/\n/, `$Cmd 2>\"$TMP_DIR/null\"`);
         }
         my @AbsPaths = ();
         foreach my $File (@Files)
@@ -988,7 +1022,7 @@ sub cmd_find($$$$)
                 $Cmd .= " -name \"$Name\"";
             }
         }
-        return split(/\n/, `$Cmd 2>$TMP_DIR/null`);
+        return split(/\n/, `$Cmd 2>\"$TMP_DIR/null\"`);
     }
 }
 
@@ -1023,7 +1057,7 @@ sub unpackDump($)
             exitStatus("Not_Found", "can't find \"unzip\" command");
         }
         chdir($UnpackDir);
-        system("$UnzipCmd \"$Path\" >$UnpackDir/contents.txt");
+        system("$UnzipCmd \"$Path\" >contents.txt");
         if($?) {
             exitStatus("Error", "can't extract \'$Path\'");
         }
@@ -1058,7 +1092,7 @@ sub unpackDump($)
             if($?) {
                 exitStatus("Error", "can't extract \'$Path\'");
             }
-            system("$TarCmd -xvf \"$Dir\\$FileName.tar\" >$UnpackDir/contents.txt");
+            system("$TarCmd -xvf \"$Dir\\$FileName.tar\" >contents.txt");
             if($?) {
                 exitStatus("Error", "can't extract \'$Path\'");
             }
@@ -1077,7 +1111,7 @@ sub unpackDump($)
                 exitStatus("Not_Found", "can't find \"tar\" command");
             }
             chdir($UnpackDir);
-            system("$TarCmd -xvzf \"$Path\" >$UnpackDir/contents.txt");
+            system("$TarCmd -xvzf \"$Path\" >contents.txt");
             if($?) {
                 exitStatus("Error", "can't extract \'$Path\'");
             }
@@ -1953,10 +1987,11 @@ sub mergeImplementations()
         {
             writeFile("$TMP_DIR/impl1", $Impl1);
             writeFile("$TMP_DIR/impl2", $Impl2);
-            my $Diff = `$DiffCmd -rNau $TMP_DIR/impl1 $TMP_DIR/impl2`;
+            my $Diff = `$DiffCmd -rNau \"$TMP_DIR/impl1\" \"$TMP_DIR/impl2\"`;
             $Diff=~s/(---|\+\+\+).+\n//g;
             $Diff=~s/\n\@\@/\n \n\@\@/g;
-            unlink("$TMP_DIR/impl1", "$TMP_DIR/impl2");
+            unlink("$TMP_DIR/impl1");
+            unlink("$TMP_DIR/impl2");
             %{$ImplProblems{$Method}}=(
                 "Diff" => get_CodeView($Diff) );
         }
@@ -2476,12 +2511,12 @@ sub checkJavaCompiler($)
         public void method(Integer p) { };
     }");
     chdir($TMP_DIR."/test_javac");
-    system("$Cmd Simple.java 2>$TMP_DIR/javac_errors");
+    system("$Cmd Simple.java 2>errors.txt");
     chdir($ORIG_DIR);
     if($?)
     {
         my $Msg = "something is going wrong with the Java compiler (javac):\n";
-        my $Err = readFile($TMP_DIR."/javac_errors");
+        my $Err = readFile($TMP_DIR."/test_javac/errors.txt");
         $Msg .= $Err;
         if($Err=~/elf\/start\.S/ and $Err=~/undefined\s+reference\s+to/)
         { # /usr/lib/gcc/i586-suse-linux/4.5/../../../crt1.o: In function _start:
@@ -2509,7 +2544,7 @@ sub runTests($$$$)
     {# create a compile-time package copy
         copy($ClassPath, $TestsPath."/$PackageName/");
     }
-    system("cd $TestsPath && $JavacCmd -g *.java");
+    system("cd \"$TestsPath\" && $JavacCmd -g *.java");
     foreach my $TestSrc (cmd_find($TestsPath,"","*\.java",""))
     {# remove test source
         unlink($TestSrc);
@@ -2525,7 +2560,7 @@ sub runTests($$$$)
     {# run tests
         my $Name = get_filename($TestPath);
         $Name=~s/\.class\Z//g;
-        system("cd $TestsPath && $JavaCmd $Name >result.txt 2>&1");
+        system("cd \"$TestsPath\" && $JavaCmd $Name >result.txt 2>&1");
         my $Result = readFile($TestsPath."/result.txt");
         unlink($TestsPath."/result.txt");
         $TEST_REPORT .= "TEST CASE: $Name\n";
@@ -2566,8 +2601,8 @@ sub compileJavaLib($$$)
     }
     my $Src1 = join($SLASH."*.java ", keys(%SrcDir1)).$SLASH."*.java ";
     my $Src2 = join($SLASH."*.java ", keys(%SrcDir2)).$SLASH."*.java ";
-    my $BuildCmd1 = "cd $BuildRoot1 && $JavacCmd -g $Src1 && $JarCmd -cmf MANIFEST.MF $LibName.jar TestPackage";
-    my $BuildCmd2 = "cd $BuildRoot2 && $JavacCmd -g $Src2 && $JarCmd -cmf MANIFEST.MF $LibName.jar TestPackage";
+    my $BuildCmd1 = "cd \"$BuildRoot1\" && $JavacCmd -g $Src1 && $JarCmd -cmf MANIFEST.MF $LibName.jar TestPackage";
+    my $BuildCmd2 = "cd \"$BuildRoot2\" && $JavacCmd -g $Src2 && $JarCmd -cmf MANIFEST.MF $LibName.jar TestPackage";
     system($BuildCmd1);
     if($?) {
         exitStatus("Error", "can't compile classes v.1");
@@ -2640,6 +2675,9 @@ sub runChecker($$$)
     }
     if($Browse) {
         $Cmd .= " -b $Browse";
+    }
+    if($OpenReport) {
+        $Cmd .= " -open";
     }
     if($Quick) {
         $Cmd .= " -quick";
@@ -4090,9 +4128,9 @@ sub writeReport($$)
     my ($Level, $Report) = @_;
     my $RPath = getReportPath($Level);
     writeFile($RPath, $Report);
-    if($Browse)
-    {
-        system($Browse." $RPath >/dev/null 2>&1 &");
+    if($Browse or $OpenReport)
+    { # open in browser
+        openReport($RPath);
         if($JoinReport or $DoubleReport)
         {
             if($Level eq "Binary")
@@ -4100,6 +4138,58 @@ sub writeReport($$)
                 sleep(1);
             }
         }
+    }
+}
+
+sub openReport($)
+{
+    my $Path = $_[0];
+    my $Cmd = "";
+    if($Browse)
+    { # user-defined browser
+        $Cmd = $Browse." \"$Path\"";
+    }
+    if(not $Cmd)
+    { # default browser
+        if($OSgroup eq "macos") {
+            system("open \"$Path\"");
+        }
+        elsif($OSgroup eq "windows") {
+            system("start \"$Path\"");
+        }
+        else
+        { # linux, freebsd, solaris
+            my @Browsers = (
+                "x-www-browser",
+                "sensible-browser",
+                "firefox",
+                "opera",
+                "xdg-open",
+                "lynx",
+                "links"
+            );
+            foreach my $Br (@Browsers)
+            {
+                if($Br = get_CmdPath($Br))
+                {
+                    $Cmd = $Br." \"$Path\"";
+                    last;
+                }
+            }
+        }
+    }
+    if($Cmd)
+    {
+        if($Debug) {
+            printMsg("INFO", "running $Cmd");
+        }
+        if($Cmd!~/lynx|links/) {
+            $Cmd .= "  >\"$TMP_DIR/null\" 2>&1 &";
+        }
+        system($Cmd);
+    }
+    else {
+        printMsg("ERROR", "cannot open report in browser");
     }
 }
 
@@ -4313,7 +4403,7 @@ sub getReport($)
         background-color:#F4F4AF;
     }
     td.failed {
-        background-color:#FFC3CE;
+        background-color:#FFCCCC;
     }
     td.new {
         background-color:#C6DEFF;
@@ -5679,10 +5769,10 @@ sub readArchive($$)
         }
         my $Package = get_PFormat($RelPath);
         if(skip_package($Package, $LibVersion))
-        {# internal packages
+        { # internal packages
             next;
         }
-        $ClassName=~s/\$/./g;# real name GlyphView$GlyphPainter => GlyphView.GlyphPainter
+        $ClassName=~s/\$/./g;# real name for GlyphView$GlyphPainter is GlyphView.GlyphPainter
         $LibClasses{$LibVersion}{$ClassName} = $Package;
         # Javap decompiler accepts relative paths only
         push(@Classes, $ClassPath);
@@ -5714,7 +5804,8 @@ sub divideArray($$)
     return () if(not $ArrayRef);
     my @Array = @{$ArrayRef};
     return () if($#Array==-1);
-    if($#Array>$Size) {
+    if($#Array>$Size)
+    {
         my @Part = splice(@Array, 0, $Size);
         return (\@Part, divideArray(\@Array, $Size));
     }
@@ -5735,9 +5826,10 @@ sub readUsage_Client($)
     my $ExtractPath = "$TMP_DIR/extracted";
     rmtree($ExtractPath);
     mkpath($ExtractPath);
-    system("cd $ExtractPath && $JarCmd -xf $Path");
+    system("cd \"$ExtractPath\" && $JarCmd -xf \"$Path\"");
     my @Classes = ();
-    foreach my $ClassPath (cmd_find($ExtractPath,"","*\.class","")) {
+    foreach my $ClassPath (cmd_find($ExtractPath,"","*\.class",""))
+    {
         next if(get_filename($ClassPath)=~/\$/);
         $ClassPath=~s/\.class\Z//g;
         $ClassPath = cut_path_prefix($ClassPath, $ORIG_DIR);
@@ -5807,14 +5899,17 @@ sub readClasses($$$)
         exitStatus("Not_Found", "can't find \"javap\" command");
     }
     my $Input = join(" ", @{$Paths});
-    $Input=~s/\$/\\\$/g;
+    if($OSgroup ne "windows")
+    { # on unix ensure that the system does not try and interpret the $, by escaping it
+        $Input=~s/\$/\\\$/g;
+    }
     my $Output = $TMP_DIR."/class-dump.txt";
     rmtree($Output);
     my $Cmd = "$JavapCmd -s -private";
     if(not $Quick) {
         $Cmd .= " -c -verbose";
     }
-    system("cd $TMP_DIR && $Cmd $Input > $Output");
+    system("cd \"$TMP_DIR\" && $Cmd ".$Input." > \"$Output\"");
     if(not -e $Output) {
         exitStatus("Error", "internal error in parser, try to reduce MAX_ARGS");
     }
@@ -6240,8 +6335,7 @@ sub getArchives($)
 sub getArchivePaths($$)
 {
     my ($Dest, $LibVersion) = @_;
-    if(-f $Dest)
-    {
+    if(-f $Dest) {
         return ($Dest);
     }
     elsif(-d $Dest)
@@ -6270,21 +6364,17 @@ sub read_symlink($)
     return $Cache{"read_symlink"}{$Path} if(defined $Cache{"read_symlink"}{$Path});
     if(my $ReadlinkCmd = get_CmdPath("readlink"))
     {
-        my $Res = `$ReadlinkCmd -n $Path`;
-        $Cache{"read_symlink"}{$Path} = $Res;
-        return $Res;
+        my $Res = `$ReadlinkCmd -n \"$Path\"`;
+        return ($Cache{"read_symlink"}{$Path} = $Res);
     }
     elsif(my $FileCmd = get_CmdPath("file"))
     {
-        my $Info = `$FileCmd $Path`;
-        if($Info=~/symbolic\s+link\s+to\s+['`"]*([\w\d\.\-\/\\]+)['`"]*/i)
-        {
-            $Cache{"read_symlink"}{$Path} = $1;
-            return $Cache{"read_symlink"}{$Path};
+        my $Info = `$FileCmd \"$Path\"`;
+        if($Info=~/symbolic\s+link\s+to\s+['`"]*([\w\d\.\-\/\\]+)['`"]*/i) {
+            return ($Cache{"read_symlink"}{$Path} = $1);
         }
     }
-    $Cache{"read_symlink"}{$Path} = "";
-    return "";
+    return ($Cache{"read_symlink"}{$Path} = "");
 }
 
 sub resolve_symlink($)
@@ -6452,7 +6542,7 @@ sub get_version($)
 {
     my $Cmd = $_[0];
     return "" if(not $Cmd);
-    my $Version = `$Cmd --version 2>$TMP_DIR/null`;
+    my $Version = `$Cmd --version 2>\"$TMP_DIR/null\"`;
     return $Version;
 }
 
@@ -6534,7 +6624,7 @@ sub readJarVersion($)
     if(not $JarCmd) {
         exitStatus("Not_Found", "can't find \"jar\" command");
     }
-    system("cd $TMP_DIR && $JarCmd -xf $Path META-INF 2>null");
+    system("cd \"$TMP_DIR\" && $JarCmd -xf \"$Path\" META-INF 2>null");
     if(my $Content = readFile("$TMP_DIR/META-INF/MANIFEST.MF"))
     {
         if($Content=~/(\A|\s)Implementation\-Version:\s*(.+)(\s|\Z)/i) {
@@ -6822,7 +6912,7 @@ sub createArchive($$)
         my $Pkg = $To."/".$Name.".zip";
         unlink($Pkg);
         chdir($To);
-        system("$ZipCmd -j \"$Name.zip\" \"$Path\" >$TMP_DIR/null");
+        system("$ZipCmd -j \"$Name.zip\" \"$Path\" >\"$TMP_DIR/null\"");
         if($?)
         { # cannot allocate memory (or other problems with "zip")
             unlink($Path);
