@@ -21,7 +21,7 @@
 </style>
 <script src="/load.php?debug=false&amp;lang=en&amp;modules=startup&amp;only=scripts&amp;skin=monobook&amp;*"></script>
 <script>if(window.mw){
-	mw.config.set({"wgCanonicalNamespace": "", "wgCanonicalSpecialPageName": false, "wgNamespaceNumber": 0, "wgPageName": "Java_API_Compliance_Checker_Options", "wgTitle": "Java API Compliance Checker Options", "wgCurRevisionId": 7949, "wgArticleId": 2600, "wgIsArticle": true, "wgAction": "view", "wgUserName": null, "wgUserGroups": ["*"], "wgCategories": ["Java API Compliance Checker"], "wgBreakFrames": false, "wgRestrictionEdit": [], "wgRestrictionMove": []});
+	mw.config.set({"wgCanonicalNamespace": "", "wgCanonicalSpecialPageName": false, "wgNamespaceNumber": 0, "wgPageName": "Java_API_Compliance_Checker_Options", "wgTitle": "Java API Compliance Checker Options", "wgCurRevisionId": 8061, "wgArticleId": 2600, "wgIsArticle": true, "wgAction": "view", "wgUserName": null, "wgUserGroups": ["*"], "wgCategories": ["Java API Compliance Checker"], "wgBreakFrames": false, "wgRestrictionEdit": [], "wgRestrictionMove": []});
 }
 </script><script>if(window.mw){
 	mw.loader.load(["mediawiki.page.startup"]);
@@ -58,15 +58,15 @@
 </li></ul>
 <div style="padding-left:40px;">Print the tool version and don't do anything else.</div><br />
 <h2> <span class="mw-headline" id="General_Options"> General Options </span></h2>
-<ul><li><b>-l|-library &lt;name&gt;</b>
+<ul><li><b>-l|-lib|-library &lt;name&gt;</b>
 </li></ul>
 <div style="padding-left:40px;">Library name (without version). It affects only on the path and the title of the report.</div><br />
 <ul><li><b>-d1|-old|-o &lt;path&gt;</b>
 </li></ul>
-<div style="padding-left:40px;">Path to the Java ARchive or <a href="http://ispras.linuxbase.org/index.php/Java_Library_Descriptor" title="Java Library Descriptor">XML-descriptor</a> of 1st (old) library version.</div><br />
+<div style="padding-left:40px;">Path to the Java ARchive or <a href="Descriptor.html" title="Java Library Descriptor">XML-descriptor</a> of 1st (old) library version.</div><br />
 <ul><li><b>-d2|-new|-n &lt;path&gt;</b>
 </li></ul>
-<div style="padding-left:40px;">Path to the Java ARchive or <a href="http://ispras.linuxbase.org/index.php/Java_Library_Descriptor" title="Java Library Descriptor">XML-descriptor</a> of 2nd (new) library version.</div><br />
+<div style="padding-left:40px;">Path to the Java ARchive or <a href="Descriptor.html" title="Java Library Descriptor">XML-descriptor</a> of 2nd (new) library version.</div><br />
 <h2> <span class="mw-headline" id="Extra_Options"> Extra Options </span></h2>
 <ul><li><b>-client|-app &lt;path&gt;</b>
 </li></ul>
@@ -95,6 +95,12 @@
 <ul><li><b>-classes-list &lt;path&gt;</b>
 </li></ul>
 <div style="padding-left:40px;">This option allows to specify a file with a list of classes that should be checked, other classes will not be checked.</div><br />
+<ul><li><b>-skip-deprecated</b>
+</li></ul>
+<div style="padding-left:40px;">Skip analysis of deprecated methods and classes.</div><br />
+<ul><li><b>-skip-classes &lt;path&gt;</b>
+</li></ul>
+<div style="padding-left:40px;">This option allows to specify a file with a list of classes that should not be checked.</div><br />
 <ul><li><b>-d|-template</b>
 </li></ul>
 <div style="padding-left:40px;">Create XML descriptor template ./VERSION.xml</div><br />
@@ -132,11 +138,11 @@
 
 <!-- 
 NewPP limit report
-Preprocessor node count: 40/1000000
+Preprocessor node count: 42/1000000
 Post-expand include size: 0/2097152 bytes
 Template argument size: 0/2097152 bytes
 Expensive parser function count: 0/100
 -->
 
-<!-- Saved in parser cache with key rasispdb:pcache:idhash:2600-0!*!0!!en!*!* and timestamp 20120608135231 -->
+<!-- Saved in parser cache with key rasispdb:pcache:idhash:2600-0!*!0!!en!*!* and timestamp 20120922173932 -->
 </div></div></div></div></div></body></html>

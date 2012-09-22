@@ -1,10 +1,11 @@
 #!/usr/bin/perl
 ###########################################################################
-# Java API Compliance Checker (Java ACC) 1.1.2
+# Java API Compliance Checker (Java ACC) 1.2
 # A tool for checking backward compatibility of a Java library API
 #
+# Copyright (C) 2011 Institute for System Programming, RAS
 # Copyright (C) 2011 Russian Linux Verification Center
-# Copyright (C) 2011-2012 ROSA Laboratory
+# Copyright (C) 2011-2012 ROSA Lab
 #
 # Written by Andrey Ponomarenko
 #
@@ -16,11 +17,11 @@
 # ============
 #  Linux, FreeBSD, Mac OS X
 #    - JDK (javap, javac)
-#    - Perl (5.8 or newer)
+#    - Perl 5 (5.8 or newer)
 #
 #  MS Windows
 #    - JDK (javap, javac)
-#    - Active Perl (5.8 or newer)
+#    - Active Perl 5 (5.8 or newer)
 #  
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License or the GNU Lesser
@@ -44,7 +45,7 @@ use Cwd qw(abs_path cwd);
 use Data::Dumper;
 use Config;
 
-my $TOOL_VERSION = "1.1.2";
+my $TOOL_VERSION = "1.2";
 my $API_DUMP_VERSION = "1.0";
 my $API_DUMP_MAJOR = majorVersion($API_DUMP_VERSION);
 
@@ -53,7 +54,7 @@ $GenerateDescriptor, $TestSystem, $DumpAPI, $ClassListPath, $ClientPath,
 $StrictCompat, $DumpVersion, $BinaryOnly, $TargetLibraryFullName, $CheckImpl,
 %TargetVersion, $SourceOnly, $ShortMode, $KeepInternal, $OutputReportPath,
 $BinaryReportPath, $SourceReportPath, $Browse, $Debug, $Quick, $SortDump,
-$OpenReport);
+$OpenReport, $SkipDeprecated, $SkipClasses);
 
 my $CmdName = get_filename($0);
 my $OSgroup = get_OSgroup();
@@ -141,6 +142,8 @@ GetOptions("h|help!" => \$Help,
   "keep-internal!" => \$KeepInternal,
   "dump|dump-api=s" => \$DumpAPI,
   "classes-list=s" => \$ClassListPath,
+  "skip-deprecated!" => \$SkipDeprecated,
+  "skip-classes=s" => \$SkipClasses,
   "short" => \$ShortMode,
   "d|template!" => \$GenerateDescriptor,
   "report-path=s" => \$OutputReportPath,
@@ -293,8 +296,15 @@ EXTRA OPTIONS:
       
       
   -classes-list <path>
-      This option allows to specify a file with a list of classes that should
-      be checked, other classes will not be checked.
+      This option allows to specify a file with a list
+      of classes that should be checked, other classes will not be checked.
+      
+  -skip-deprecated
+      Skip analysis of deprecated methods and classes.
+      
+  -skip-classes <path>
+      This option allows to specify a file with a list
+      of classes that should not be checked.
       
   -short <path>
       Generate short report without 'Added Methods' section.
@@ -323,6 +333,7 @@ EXTRA OPTIONS:
         - analysis of method parameter names
         - analysis of class field values
         - analysis of usage of added abstract methods
+        - distinction of deprecated methods and classes
 
   -sort
       Enable sorting of data in API dumps.
@@ -596,6 +607,7 @@ my %Class_Constructed;
 
 #Classes
 my %ClassList_User;
+my %SkipClass_User;
 my %UsedMethods_Client;
 my %UsedFields_Client;
 my %LibClasses;
@@ -1251,7 +1263,7 @@ sub getProblemSeverity($$$$)
         }
         elsif($Kind eq "Changed_Final_Field_Value")
         {
-            if($Target=~/(\A|_)(VERSION|VERNUM)(_|\Z)/i) {
+            if($Target=~/(\A|_)(VERSION|VERNUM|BUILDNUMBER|BUILD)(_|\Z)/i) {
                 return "Low";
             }
         }
@@ -1910,10 +1922,16 @@ sub get_Type($$)
 sub methodFilter($$)
 {
     my ($Method, $LibVersion) = @_;
-    my $CName = get_TypeName($MethodInfo{$LibVersion}{$Method}{"Class"}, $LibVersion);
+    my $ClassId = $MethodInfo{$LibVersion}{$Method}{"Class"};
+    my %Class = get_Type($ClassId, $LibVersion);
     my $Package = $MethodInfo{$LibVersion}{$Method}{"Package"};
     if($ClassListPath
-    and not $ClassList_User{$CName})
+    and not $ClassList_User{$Class{"Name"}})
+    { # user defined classes
+        return 0;
+    }
+    if($SkipClasses
+    and $SkipClass_User{$Class{"Name"}})
     { # user defined classes
         return 0;
     }
@@ -1924,6 +1942,17 @@ sub methodFilter($$)
     if(skip_package($Package, $LibVersion))
     { # internal packages
         return 0;
+    }
+    if(defined $SkipDeprecated)
+    {
+        if($Class{"Deprecated"})
+        { # deprecated class
+            return 0;
+        }
+        if($MethodInfo{$LibVersion}{$Method}{"Deprecated"})
+        { # deprecated method
+            return 0;
+        }
     }
     return 1;
 }
@@ -2544,9 +2573,11 @@ sub runTests($$$$)
     {# create a compile-time package copy
         copy($ClassPath, $TestsPath."/$PackageName/");
     }
-    system("cd \"$TestsPath\" && $JavacCmd -g *.java");
+    chdir($TestsPath);
+    system($JavacCmd." -g *.java");
+    chdir($ORIG_DIR);
     foreach my $TestSrc (cmd_find($TestsPath,"","*\.java",""))
-    {# remove test source
+    { # remove test source
         unlink($TestSrc);
     }
     rmtree($TestsPath."/$PackageName");
@@ -2560,7 +2591,9 @@ sub runTests($$$$)
     {# run tests
         my $Name = get_filename($TestPath);
         $Name=~s/\.class\Z//g;
-        system("cd \"$TestsPath\" && $JavaCmd $Name >result.txt 2>&1");
+        chdir($TestsPath);
+        system($JavaCmd." $Name >result.txt 2>&1");
+        chdir($ORIG_DIR);
         my $Result = readFile($TestsPath."/result.txt");
         unlink($TestsPath."/result.txt");
         $TEST_REPORT .= "TEST CASE: $Name\n";
@@ -2599,18 +2632,36 @@ sub compileJavaLib($$$)
     foreach my $Path (cmd_find($BuildRoot2,"f","*.java","")) {
         $SrcDir2{get_dirname($Path)} = 1;
     }
-    my $Src1 = join($SLASH."*.java ", keys(%SrcDir1)).$SLASH."*.java ";
-    my $Src2 = join($SLASH."*.java ", keys(%SrcDir2)).$SLASH."*.java ";
-    my $BuildCmd1 = "cd \"$BuildRoot1\" && $JavacCmd -g $Src1 && $JarCmd -cmf MANIFEST.MF $LibName.jar TestPackage";
-    my $BuildCmd2 = "cd \"$BuildRoot2\" && $JavacCmd -g $Src2 && $JarCmd -cmf MANIFEST.MF $LibName.jar TestPackage";
-    system($BuildCmd1);
-    if($?) {
-        exitStatus("Error", "can't compile classes v.1");
+    # build classes v.1
+    foreach my $Dir (keys(%SrcDir1))
+    {
+        chdir($Dir);
+        system("$JavacCmd -g *.java");
+        chdir($ORIG_DIR);
+        if($?) {
+            exitStatus("Error", "can't compile classes v.1");
+        }
     }
-    system($BuildCmd2);
-    if($?) {
-        exitStatus("Error", "can't compile classes v.2");
+    # create java archive v.1
+    chdir($BuildRoot1);
+    system("$JarCmd -cmf MANIFEST.MF $LibName.jar TestPackage");
+    chdir($ORIG_DIR);
+    
+    # build classes v.2
+    foreach my $Dir (keys(%SrcDir2))
+    {
+        chdir($Dir);
+        system("$JavacCmd -g *.java");
+        chdir($ORIG_DIR);
+        if($?) {
+            exitStatus("Error", "can't compile classes v.2");
+        }
     }
+    # create java archive v.2
+    chdir($BuildRoot2);
+    system("$JarCmd -cmf MANIFEST.MF $LibName.jar TestPackage");
+    chdir($ORIG_DIR);
+    
     foreach my $SrcPath (cmd_find($BuildRoot1,"","*\.java","")) {
         unlink($SrcPath);
     }
@@ -2681,6 +2732,9 @@ sub runChecker($$$)
     }
     if($Quick) {
         $Cmd .= " -quick";
+    }
+    if(defined $SkipDeprecated) {
+        $Cmd .= " -skip-deprecated";
     }
     if($Debug)
     {
@@ -5114,12 +5168,28 @@ sub testSystem()
     public class RemovedMethod {
         public Integer field = 100;
         public Integer removedMethod(Integer param1, String param2) { return param1; }
-        public Integer removedStaticMethod(Integer param) { return param; }
+        public static Integer removedStaticMethod(Integer param) { return param; }
     }");
     writeFile($Path_v2."/RemovedMethod.java",
     "package $PackageName;
     public class RemovedMethod {
         public Integer field = 100;
+    }");
+    
+    # Removed_Method (Deprecated)
+    writeFile($Path_v1."/RemovedDeprecatedMethod.java",
+    "package $PackageName;
+    public class RemovedDeprecatedMethod {
+        public Integer field = 100;
+        public Integer otherMethod(Integer param) { return param; }
+        \@Deprecated
+        public Integer removedMethod(Integer param1, String param2) { return param1; }
+    }");
+    writeFile($Path_v2."/RemovedDeprecatedMethod.java",
+    "package $PackageName;
+    public class RemovedDeprecatedMethod {
+        public Integer field = 100;
+        public Integer otherMethod(Integer param) { return param; }
     }");
     
     # Interface_Removed_Abstract_Method
@@ -5342,6 +5412,16 @@ sub testSystem()
     writeFile($Path_v1."/RemovedClass.java",
     "package $PackageName;
     public class RemovedClass extends BaseClass {
+        public Integer someMethod(Integer param){
+            return param;
+        }
+    }");
+    
+    # Removed_Class (Deprecated)
+    writeFile($Path_v1."/RemovedDeprecatedClass.java",
+    "package $PackageName;
+    \@Deprecated
+    public class RemovedDeprecatedClass {
         public Integer someMethod(Integer param){
             return param;
         }
@@ -5754,7 +5834,12 @@ sub readArchive($$)
     my $ExtractPath = "$TMP_DIR/".($ExtractCounter++);
     rmtree($ExtractPath);
     mkpath($ExtractPath);
-    system("cd \"$ExtractPath\" && $JarCmd -xf \"$Path\"");
+    chdir($ExtractPath);
+    system($JarCmd." -xf \"$Path\"");
+    if($?) {
+        exitStatus("Error", "can't extract \'$Path\'");
+    }
+    chdir($ORIG_DIR);
     my @Classes = ();
     foreach my $ClassPath (cmd_find($ExtractPath,"","*\.class",""))
     {
@@ -5777,6 +5862,7 @@ sub readArchive($$)
         # Javap decompiler accepts relative paths only
         push(@Classes, $ClassPath);
     }
+    
     if($#Classes!=-1)
     {
         foreach my $PartRef (divideArray(\@Classes, $MAX_ARGS)) {
@@ -5826,7 +5912,12 @@ sub readUsage_Client($)
     my $ExtractPath = "$TMP_DIR/extracted";
     rmtree($ExtractPath);
     mkpath($ExtractPath);
-    system("cd \"$ExtractPath\" && $JarCmd -xf \"$Path\"");
+    chdir($ExtractPath);
+    system($JarCmd." -xf \"$Path\"");
+    if($?) {
+        exitStatus("Error", "can't extract \'$Path\'");
+    }
+    chdir($ORIG_DIR);
     my @Classes = ();
     foreach my $ClassPath (cmd_find($ExtractPath,"","*\.class",""))
     {
@@ -5909,7 +6000,9 @@ sub readClasses($$$)
     if(not $Quick) {
         $Cmd .= " -c -verbose";
     }
-    system("cd \"$TMP_DIR\" && $Cmd ".$Input." > \"$Output\"");
+    chdir($TMP_DIR);
+    system($Cmd." ".$Input." >\"$Output\"");
+    chdir($ORIG_DIR);
     if(not -e $Output) {
         exitStatus("Error", "internal error in parser, try to reduce MAX_ARGS");
     }
@@ -5930,7 +6023,7 @@ sub readClasses($$$)
         next if($LINE=~/\sof\s|\sline \d+:|\[\s*class|= \[| \$|\$\d| class\$/);
         $LINE=~s/\s*,\s*/,/g;
         $LINE=~s/\$/#/g;
-        if($LINE=~/LocalVariableTable/) {
+        if(index($LINE, "LocalVariableTable")!=-1) {
             $InParamTable += 1;
         }
         elsif($LINE=~/Exception\s+table/) {
@@ -5954,7 +6047,7 @@ sub readClasses($$$)
                         if(defined $MethodInfo{1}{$CurrentMethod}) {
                             $MethodInvoked{2}{$InvokedName}{$CurrentMethod} = 1;
                         }
-                        if($LINE!~/ invokestatic / and $InvokedName!~/<init>/)
+                        if(index($LINE, " invokestatic ")==-1 and index($InvokedName, "<init>")==-1)
                         {
                             $InvokedName=~s/\A\"\[L(.+);"/$1/g;
                             $InvokedName=~s/#/./g;
@@ -6196,6 +6289,14 @@ sub readClasses($$$)
             if($LINE=~/(\A|\s+)static\s+/) {
                 $TypeAttr{"Static"} = 1;
             }
+        }
+        elsif($CurrentMethod and index($LINE, "Deprecated: true")!=-1)
+        { # deprecated method
+            $MethodInfo{$LibVersion}{$CurrentMethod}{"Deprecated"} = 1;
+        }
+        elsif($CurrentClass and index($LINE, "Deprecated: length")!=-1)
+        { # deprecated method
+            $TypeAttr{"Deprecated"} = 1;
         }
         else {
             # unparsed
@@ -6624,7 +6725,9 @@ sub readJarVersion($)
     if(not $JarCmd) {
         exitStatus("Not_Found", "can't find \"jar\" command");
     }
-    system("cd \"$TMP_DIR\" && $JarCmd -xf \"$Path\" META-INF 2>null");
+    chdir($TMP_DIR);
+    system($JarCmd." -xf \"$Path\" META-INF 2>null");
+    chdir($ORIG_DIR);
     if(my $Content = readFile("$TMP_DIR/META-INF/MANIFEST.MF"))
     {
         if($Content=~/(\A|\s)Implementation\-Version:\s*(.+)(\s|\Z)/i) {
@@ -7053,6 +7156,17 @@ sub scenario()
         {
             $Class=~s/\//./g;
             $ClassList_User{$Class} = 1;
+        }
+    }
+    if($SkipClasses)
+    {
+        if(not -f $SkipClasses) {
+            exitStatus("Access_Error", "can't access file \'$SkipClasses\'");
+        }
+        foreach my $Class (split(/\n/, readFile($SkipClasses)))
+        {
+            $Class=~s/\//./g;
+            $SkipClass_User{$Class} = 1;
         }
     }
     if($ClientPath)
