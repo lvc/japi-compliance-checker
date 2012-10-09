@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 ###########################################################################
-# Java API Compliance Checker (Java ACC) 1.2
+# Java API Compliance Checker (Java ACC) 1.2.1
 # A tool for checking backward compatibility of a Java library API
 #
 # Copyright (C) 2011 Institute for System Programming, RAS
@@ -45,7 +45,7 @@ use Cwd qw(abs_path cwd);
 use Data::Dumper;
 use Config;
 
-my $TOOL_VERSION = "1.2";
+my $TOOL_VERSION = "1.2.1";
 my $API_DUMP_VERSION = "1.0";
 my $API_DUMP_MAJOR = majorVersion($API_DUMP_VERSION);
 
@@ -54,7 +54,7 @@ $GenerateDescriptor, $TestSystem, $DumpAPI, $ClassListPath, $ClientPath,
 $StrictCompat, $DumpVersion, $BinaryOnly, $TargetLibraryFullName, $CheckImpl,
 %TargetVersion, $SourceOnly, $ShortMode, $KeepInternal, $OutputReportPath,
 $BinaryReportPath, $SourceReportPath, $Browse, $Debug, $Quick, $SortDump,
-$OpenReport, $SkipDeprecated, $SkipClasses);
+$OpenReport, $SkipDeprecated, $SkipClasses, $ShowAccess);
 
 my $CmdName = get_filename($0);
 my $OSgroup = get_OSgroup();
@@ -94,7 +94,7 @@ my %HomePage = (
 
 my $ShortUsage = "Java API Compliance Checker (Java ACC) $TOOL_VERSION
 A tool for checking backward compatibility of a Java library API
-Copyright (C) 2012 ROSA Laboratory
+Copyright (C) 2012 ROSA Lab
 License: GNU LGPL or GNU GPL
 
 Usage: $CmdName [options]
@@ -151,6 +151,7 @@ GetOptions("h|help!" => \$Help,
   "src-report-path=s" => \$SourceReportPath,
   "quick!" => \$Quick,
   "sort!" => \$SortDump,
+  "show-access!" => \$ShowAccess,
 #other options
   "test!" => \$TestSystem,
   "debug!" => \$Debug,
@@ -337,6 +338,9 @@ EXTRA OPTIONS:
 
   -sort
       Enable sorting of data in API dumps.
+      
+  -show-access
+      Show access level of non-public methods listed in the report.
 
 OTHER OPTIONS:
   -test
@@ -927,6 +931,15 @@ sub get_Signature($$$)
         }
         elsif($MethodInfo{$LibVersion}{$Method}{"Abstract"}) {
             $Signature .= " [abstract]";
+        }
+        if($ShowAccess)
+        {
+            if(my $Access = $MethodInfo{$LibVersion}{$Method}{"Access"})
+            {
+                if($Access ne "public") {
+                    $Signature .= " [".$Access."]";
+                }
+            }
         }
         if(my $ReturnId = $MethodInfo{$LibVersion}{$Method}{"Return"}) {
             $Signature .= " :".get_TypeName($ReturnId, $LibVersion);
@@ -2446,7 +2459,7 @@ sub highLight_Signature_PPos_Italic($$$$)
     {
         $Return = $1;
     }
-    if($Signature=~/(.+)\(.*\)(| \[static\]| \[abstract\])\Z/)
+    if($Signature=~/(.+)\(.*\)((| \[static\]| \[abstract\])(| \[(public|private|protected)\]))\Z/)
     {
         ($Begin, $End) = ($1, $2);
     }
@@ -2506,6 +2519,7 @@ sub highLight_Signature_PPos_Italic($$$$)
     $Signature=~s!\[\]![&#160;]!g;
     $Signature=~s!operator=!operator&#160;=!g;
     $Signature=~s!(\[static\]|\[abstract\])!<span class='sym_kind'>$1</span>!g;
+    $Signature=~s!(\[public\]|\[private\]|\[protected\])!<span class='sym_kind'>$1</span>!g;
     return $Signature;
 }
 
@@ -4206,10 +4220,10 @@ sub openReport($)
     if(not $Cmd)
     { # default browser
         if($OSgroup eq "macos") {
-            system("open \"$Path\"");
+            $Cmd = "open \"$Path\"";
         }
         elsif($OSgroup eq "windows") {
-            system("start \"$Path\"");
+            $Cmd = "start ".path_format($Path, $OSgroup);
         }
         else
         { # linux, freebsd, solaris
@@ -4237,8 +4251,12 @@ sub openReport($)
         if($Debug) {
             printMsg("INFO", "running $Cmd");
         }
-        if($Cmd!~/lynx|links/) {
-            $Cmd .= "  >\"$TMP_DIR/null\" 2>&1 &";
+        if($OSgroup ne "windows"
+        and $OSgroup ne "macos")
+        {
+            if($Cmd!~/lynx|links/) {
+                $Cmd .= "  >\"$TMP_DIR/null\" 2>&1 &";
+            }
         }
         system($Cmd);
     }
@@ -7075,7 +7093,7 @@ sub scenario()
         exit(0);
     }
     if(defined $ShowVersion) {
-        print "Java API Compliance Checker (Java ACC) $TOOL_VERSION\nCopyright (C) 2012 ROSA Laboratory\nLicense: LGPL or GPL <http://www.gnu.org/licenses/>\nThis program is free software: you can redistribute it and/or modify it.\n\nWritten by Andrey Ponomarenko.\n";
+        print "Java API Compliance Checker (Java ACC) $TOOL_VERSION\nCopyright (C) 2012 ROSA Lab\nLicense: LGPL or GPL <http://www.gnu.org/licenses/>\nThis program is free software: you can redistribute it and/or modify it.\n\nWritten by Andrey Ponomarenko.\n";
         exit(0);
     }
     if(defined $DumpVersion) {
