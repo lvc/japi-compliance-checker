@@ -5,7 +5,7 @@ INSTALL:
   sudo perl Makefile.pl -install --prefix=/usr
 
 USAGE:
-  japi-compliance-checker -old OLD.jar -new NEW.jar
+  japi-compliance-checker OLD.jar NEW.jar
 
 ADV. USAGE:
   For advanced usage, see doc/Readme.html or output of --help option.

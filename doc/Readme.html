@@ -21,7 +21,7 @@
 </style>
 <script src="/load.php?debug=false&amp;lang=en&amp;modules=startup&amp;only=scripts&amp;skin=monobook&amp;*"></script>
 <script>if(window.mw){
-	mw.config.set({"wgCanonicalNamespace": "", "wgCanonicalSpecialPageName": false, "wgNamespaceNumber": 0, "wgPageName": "Java_API_Compliance_Checker", "wgTitle": "Java API Compliance Checker", "wgCurRevisionId": 8113, "wgArticleId": 2598, "wgIsArticle": true, "wgAction": "view", "wgUserName": null, "wgUserGroups": ["*"], "wgCategories": ["Java API Compliance Checker"], "wgBreakFrames": false, "wgRestrictionEdit": [], "wgRestrictionMove": []});
+	mw.config.set({"wgCanonicalNamespace": "", "wgCanonicalSpecialPageName": false, "wgNamespaceNumber": 0, "wgPageName": "Java_API_Compliance_Checker", "wgTitle": "Java API Compliance Checker", "wgCurRevisionId": 8129, "wgArticleId": 2598, "wgIsArticle": true, "wgAction": "view", "wgUserName": null, "wgUserGroups": ["*"], "wgCategories": ["Java API Compliance Checker"], "wgBreakFrames": false, "wgRestrictionEdit": [], "wgRestrictionMove": []});
 }
 </script><script>if(window.mw){
 	mw.loader.load(["mediawiki.page.startup"]);
@@ -83,7 +83,7 @@
 <h2> <span class="mw-headline" id="Downloads"> Downloads </span></h2>
 <h3> <span class="mw-headline" id="Releases"> Releases </span></h3>
 <p>All releases can be downloaded from <b><a href="Changes.html" title="Java API Compliance Checker Downloads">this page</a></b> or <b><a rel="nofollow" class="external text" href="https://github.com/lvc/japi-compliance-checker/downloads/">github.com</a></b>.
-</p><p>Latest release: <a rel="nofollow" class="external text" href="https://github.com/lvc/japi-compliance-checker/downloads/japi-compliance-checker-1.2.1.tar.gz">1.2.1</a>
+</p><p>Latest release: <a rel="nofollow" class="external text" href="https://github.com/lvc/japi-compliance-checker/downloads/japi-compliance-checker-1.3.tar.gz">1.3</a>
 </p>
 <h3> <span class="mw-headline" id="Git"> Git </span></h3>
 <p>Read-only access to the latest development version:<br />
@@ -156,7 +156,7 @@ You can see detailed problem descriptions in the visual interactive HTML-format 
 <h2> <span class="mw-headline" id="Usage"> Usage </span></h2>
 <h3> <span class="mw-headline" id="Compare_Java_ARchives"> Compare Java ARchives </span></h3>
 <p>Command to compare two java archives:<br />
-&#160;&#160;<code style="border: dashed 1px gray; background-color: #f0f0f0;">&#160;japi-compliance-checker -lib <i>NAME</i> -old <i>V1.jar</i> -new <i>V2.jar</i>&#160;</code><br /><br />
+&#160;&#160;<code style="border: dashed 1px gray; background-color: #f0f0f0;">&#160;japi-compliance-checker <i>V1.jar</i> <i>V2.jar</i>&#160;</code><br /><br />
 </p><p>The compatibility report will be generated to:<br />
 &#160;&#160;<code style="border: dashed 1px gray; background-color: #f0f0f0;">&#160;compat_reports/<i>NAME</i>/<i>V1</i>_to_<i>V2</i>/compat_report.html&#160;</code>
 </p>
@@ -193,7 +193,7 @@ The API dump will be generated to:<br />
 </p>
 <h3> <span class="mw-headline" id="Examples"> Examples </span></h3>
 <p>Check the JDO library API versions for compatibility:<br />
-&#160;&#160;<code style="border: dashed 1px gray; background-color: #f0f0f0;">&#160;japi-compliance-checker -l jdo -old jdo-api-2.0.jar -new jdo-api-3.0.jar&#160;</code><br /><br />
+&#160;&#160;<code style="border: dashed 1px gray; background-color: #f0f0f0;">&#160;japi-compliance-checker jdo-api-2.0.jar jdo-api-3.0.jar&#160;</code><br /><br />
 The report will be generated to:<br />
 &#160;&#160;<code style="border: dashed 1px gray; background-color: #f0f0f0;">&#160;compat_reports/jdo/2.0_to_3.0/compat_report.html&#160;</code><br /><br />
 Dump library API:<br />
@@ -297,5 +297,5 @@ Template argument size: 0/2097152 bytes
 Expensive parser function count: 0/100
 -->
 
-<!-- Saved in parser cache with key rasispdb:pcache:idhash:2598-0!*!0!!en!*!* and timestamp 20121009133803 -->
+<!-- Saved in parser cache with key rasispdb:pcache:idhash:2598-0!*!0!!en!*!* and timestamp 20121126125525 -->
 </div></div></div></div></div></body></html>

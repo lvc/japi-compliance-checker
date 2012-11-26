@@ -8,12 +8,12 @@ All rights reserved.
 RELEASE INFORMATION
 
 Project:           Java API Compliance Checker (Java ACC)
-Version:           1.2.1
-Date:              2012-10-09
+Version:           1.3
+Date:              2012-11-26
 
 
 This file explains how to install and setup environment
-for Java ACC tool in your computer.
+for the tool in your computer.
 
 
 Content:
@@ -62,7 +62,7 @@ Content:
 4. RUNNING THE TOOL
 ===================
 
-   1. japi-compliance-checker -old OLD.jar -new NEW.jar
+   1. japi-compliance-checker OLD.jar NEW.jar
 
 
 

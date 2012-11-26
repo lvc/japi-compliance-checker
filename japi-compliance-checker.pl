@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 ###########################################################################
-# Java API Compliance Checker (Java ACC) 1.2.1
+# Java API Compliance Checker (Java ACC) 1.3
 # A tool for checking backward compatibility of a Java library API
 #
 # Copyright (C) 2011 Institute for System Programming, RAS
@@ -37,7 +37,7 @@
 # If not, see <http://www.gnu.org/licenses/>.
 ###########################################################################
 use Getopt::Long;
-Getopt::Long::Configure ("posix_default", "no_ignore_case");
+Getopt::Long::Configure ("posix_default", "no_ignore_case", "permute");
 use File::Path qw(mkpath rmtree);
 use File::Temp qw(tempdir);
 use File::Copy qw(copy);
@@ -45,7 +45,7 @@ use Cwd qw(abs_path cwd);
 use Data::Dumper;
 use Config;
 
-my $TOOL_VERSION = "1.2.1";
+my $TOOL_VERSION = "1.3";
 my $API_DUMP_VERSION = "1.0";
 my $API_DUMP_MAJOR = majorVersion($API_DUMP_VERSION);
 
@@ -98,27 +98,31 @@ Copyright (C) 2012 ROSA Lab
 License: GNU LGPL or GNU GPL
 
 Usage: $CmdName [options]
-Example: $CmdName -old OLD.jar -new NEW.jar
+Example: $CmdName OLD.jar NEW.jar
 
-More info: $CmdName --help\n";
+More info: $CmdName --help";
 
-if($#ARGV==-1) {
-    print $ShortUsage;
+if($#ARGV==-1)
+{
+    printMsg("INFO", $ShortUsage);
     exit(0);
 }
 
 foreach (2 .. $#ARGV)
 { # correct comma separated options
-    if($ARGV[$_-1] eq ",") {
+    if($ARGV[$_-1] eq ",")
+    {
         $ARGV[$_-2].=",".$ARGV[$_];
         splice(@ARGV, $_-1, 2);
     }
-    elsif($ARGV[$_-1]=~/,\Z/) {
+    elsif($ARGV[$_-1]=~/,\Z/)
+    {
         $ARGV[$_-1].=$ARGV[$_];
         splice(@ARGV, $_, 1);
     }
     elsif($ARGV[$_]=~/\A,/
-    and $ARGV[$_] ne ",") {
+    and $ARGV[$_] ne ",")
+    {
         $ARGV[$_-1].=$ARGV[$_];
         splice(@ARGV, $_, 1);
     }
@@ -127,15 +131,15 @@ foreach (2 .. $#ARGV)
 GetOptions("h|help!" => \$Help,
   "v|version!" => \$ShowVersion,
   "dumpversion!" => \$DumpVersion,
-#general options
+# general options
   "l|lib|library=s" => \$TargetLibraryName,
   "d1|old|o=s" => \$Descriptor{1}{"Path"},
   "d2|new|n=s" => \$Descriptor{2}{"Path"},
-#extra options
+# extra options
   "client|app=s" => \$ClientPath,
   "binary!" => \$BinaryOnly,
   "source!" => \$SourceOnly,
-  "check-implementation!" => \$CheckImpl,
+  "check-impl|check-implementation!" => \$CheckImpl,
   "v1|version1=s" => \$TargetVersion{1},
   "v2|version2=s" => \$TargetVersion{2},
   "s|strict!" => \$StrictCompat,
@@ -152,7 +156,7 @@ GetOptions("h|help!" => \$Help,
   "quick!" => \$Quick,
   "sort!" => \$SortDump,
   "show-access!" => \$ShowAccess,
-#other options
+# other options
   "test!" => \$TestSystem,
   "debug!" => \$Debug,
   "l-full|lib-full=s" => \$TargetLibraryFullName,
@@ -160,9 +164,21 @@ GetOptions("h|help!" => \$Help,
   "open!" => \$OpenReport
 ) or ERR_MESSAGE();
 
+if(@ARGV)
+{ 
+    if($#ARGV==1)
+    { # japi-compliance-checker OLD.jar NEW.jar
+        $Descriptor{1}{"Path"} = $ARGV[0];
+        $Descriptor{2}{"Path"} = $ARGV[1];
+    }
+    else {
+        ERR_MESSAGE();
+    }
+}
+
 sub ERR_MESSAGE()
 {
-    print "\n".$ShortUsage;
+    printMsg("INFO", "\n".$ShortUsage);
     exit($ERROR_CODE{"Error"});
 }
 
@@ -194,7 +210,7 @@ USAGE:
   $CmdName [options]
 
 EXAMPLE:
-  $CmdName -old OLD.jar -new NEW.jar
+  $CmdName OLD.jar NEW.jar
     OR
   $CmdName -lib NAME -old OLD.xml -new NEW.xml
   OLD.xml and NEW.xml are XML-descriptors:
@@ -220,11 +236,10 @@ INFORMATION OPTIONS:
       Print the tool version ($TOOL_VERSION) and don't do anything else.
 
 GENERAL OPTIONS:
-  -l|-lib|-library <name>
+  -l|-lib|-library NAME
       Library name (without version).
-      It affects only on the path and the title of the report.
 
-  -d1|-old|-o <path(s)>
+  -d1|-old|-o PATH
       Descriptor of 1st (old) library version.
       It may be one of the following:
       
@@ -250,16 +265,16 @@ GENERAL OPTIONS:
          6. Comma separated list of directories with Java ARchives
 
       If you are using 1, 4-6 descriptor types then you should
-      specify version numbers with -v1 <num> and -v2 <num> options too.
+      specify version numbers with -v1 and -v2 options too.
 
       If you are using *.jar as a descriptor then the tool will try to
       get implementation version from MANIFEST.MF file.
 
-  -d2|-new|-n <path(s)>
+  -d2|-new|-n PATH
       Descriptor of 2nd (new) library version.
 
 EXTRA OPTIONS:
-  -client|-app <path>
+  -client|-app PATH
       This option allows to specify the client Java ARchive that should be
       checked for portability to the new library version.
       
@@ -271,11 +286,11 @@ EXTRA OPTIONS:
       Show \"Source\" compatibility problems only.
       Generate report to \"src_compat_report.html\".
       
-  -check-implementation
+  -check-impl|-check-implementation
       Compare implementation code (method\'s body) of Java classes.
       Add \'Problems with Implementation\' section to the report.
       
-  -v1|-version1 <num>
+  -v1|-version1 NUM
       Specify 1st API version outside the descriptor. This option is needed
       if you have prefered an alternative descriptor type (see -d1 option).
       
@@ -284,49 +299,49 @@ EXTRA OPTIONS:
               VERSION
           </version>
 
-  -v2|-version2 <num>
+  -v2|-version2 NUM
       Specify 2nd library version outside the descriptor.
       
   -s|-strict
       Treat all API compatibility warnings as problems.
       
-  -dump|-dump-api <descriptor>
+  -dump|-dump-api PATH
       Dump library API to gzipped TXT format file. You can transfer it
       anywhere and pass instead of the descriptor. Also it may be used
       for debugging the tool. Compatible dump versions: $API_DUMP_MAJOR.0<=V<=$API_DUMP_VERSION
       
       
-  -classes-list <path>
+  -classes-list PATH
       This option allows to specify a file with a list
       of classes that should be checked, other classes will not be checked.
       
   -skip-deprecated
       Skip analysis of deprecated methods and classes.
       
-  -skip-classes <path>
+  -skip-classes PATH
       This option allows to specify a file with a list
       of classes that should not be checked.
       
-  -short <path>
+  -short PATH
       Generate short report without 'Added Methods' section.
       
   -d|-template
       Create XML descriptor template ./VERSION.xml
 
-  -report-path <path>
+  -report-path PATH
       Path to compatibility report.
       Default: 
-          compat_reports/<library name>/<v1>_to_<v2>/compat_report.html
+          compat_reports/LIB_NAME/V1_to_V2/compat_report.html
 
-  -bin-report-path <path>
+  -bin-report-path PATH
       Path to \"Binary\" compatibility report.
       Default: 
-          compat_reports/<library name>/<v1>_to_<v2>/bin_compat_report.html
+          compat_reports/LIB_NAME/V1_to_V2/bin_compat_report.html
 
-  -src-report-path <path>
+  -src-report-path PATH
       Path to \"Source\" compatibility report.
       Default: 
-          compat_reports/<library name>/<v1>_to_<v2>/src_compat_report.html
+          compat_reports/LIB_NAME/V1_to_V2/src_compat_report.html
 
   -quick
       Quick analysis.
@@ -351,15 +366,15 @@ OTHER OPTIONS:
   -debug
       Debugging mode. Print debug info on the screen. Save intermediate
       analysis stages in the debug directory:
-          debug/<library>/<version>/
+          debug/LIB_NAME/VER/
 
       Also consider using --dump option for debugging the tool.
 
-  -l-full|-lib-full <name>
-      Change library name in the report title to <name>. By default
+  -l-full|-lib-full NAME
+      Change library name in the report title to NAME. By default
       will be displayed a name specified by -l option.
 
-  -b|-browse <program>
+  -b|-browse PROGRAM
       Open report(s) in the browser (firefox, opera, etc.).
 
   -open
@@ -367,7 +382,7 @@ OTHER OPTIONS:
 
 REPORT:
     Compatibility report will be generated to:
-        compat_reports/<library name>/<v1>_to_<v2>/compat_report.html
+        compat_reports/LIB_NAME/V1_to_V2/compat_report.html
       
 EXIT CODES:
     0 - Compatible. The tool has run without any errors.
@@ -382,7 +397,7 @@ MORE INFORMATION:
 
 sub HELP_MESSAGE()
 { # -help
-    print $HelpMessage."\n\n";
+    printMsg("INFO", $HelpMessage."\n");
 }
 
 my $Descriptor_Template = "
@@ -1463,8 +1478,11 @@ sub mergeTypes($$)
         my %SuperClass2 = get_Type($Type2{"SuperClass"}, 2);
         if($SuperClass2{"Name"} ne $SuperClass1{"Name"})
         {
-            if($SuperClass1{"Name"} eq "java.lang.Object")
+            if($SuperClass1{"Name"} eq "java.lang.Object"
+            or not $SuperClass1{"Name"})
             {
+              # Java 6: java.lang.Object
+              # Java 7: none
                 if($SuperClass2{"Abstract"}
                 and $Type1{"Abstract"} and $Type2{"Abstract"}
                 and keys(%{$Class_AbstractMethods{2}{$SuperClass2{"Name"}}}))
@@ -1490,8 +1508,11 @@ sub mergeTypes($$)
                         "Target"=>$SuperClass2{"Name"}  );
                 }
             }
-            elsif($SuperClass2{"Name"} eq "java.lang.Object")
+            elsif($SuperClass2{"Name"} eq "java.lang.Object"
+            or not $SuperClass2{"Name"})
             {
+              # Java 6: java.lang.Object
+              # Java 7: none
                 %{$SubProblems{"Removed_Super_Class"}{""}} = (
                     "Type_Name"=>$Type1{"Name"},
                     "Target"=>$SuperClass1{"Name"}  );
@@ -1850,7 +1871,7 @@ sub unmangle($)
                     $CurParam = "double";
                 }
                 else {
-                    print "WARNING: unmangling error\n";
+                    printMsg("INFO", "WARNING: unmangling error");
                 }
                 if($IsArray) {
                     $CurParam .= "[]";
@@ -2429,18 +2450,15 @@ sub htmlSpecChars($)
     return $Str;
 }
 
-sub highLight_Signature($)
-{
+sub highLight_Signature($) {
     return highLight_Signature_PPos_Italic($_[0], "", 1, 0);
 }
 
-sub highLight_Signature_Italic($)
-{
+sub highLight_Signature_Italic($) {
     return highLight_Signature_PPos_Italic($_[0], "", 1, 0);
 }
 
-sub highLight_Signature_Italic_Color($)
-{
+sub highLight_Signature_Italic_Color($) {
     return highLight_Signature_PPos_Italic($_[0], "", 1, 1);
 }
 
@@ -2455,8 +2473,7 @@ sub highLight_Signature_PPos_Italic($$$$)
         return $Signature;
     }
     my ($Begin, $End, $Return) = ("", "", "");
-    if($Signature=~s/\s+:(.+)//g)
-    {
+    if($Signature=~s/\s+:(.+)//g) {
         $Return = $1;
     }
     if($Signature=~/(.+)\(.*\)((| \[static\]| \[abstract\])(| \[(public|private|protected)\]))\Z/)
@@ -2474,7 +2491,8 @@ sub highLight_Signature_PPos_Italic($$$$)
         if($Part=~/(\w+)[\,\)]*\Z/i) {
             $ParamName = $1;
         }
-        if(not $ParamName) {
+        if(not $ParamName)
+        {
             push(@Parts, $Part_Styled);
             next;
         }
@@ -2533,8 +2551,7 @@ sub get_s_params($$)
         {
             foreach (0 .. $#Params)
             {
-                if($_!=$#Params)
-                {
+                if($_!=$#Params) {
                     $Params[$_].=",";
                 }
             }
@@ -2734,9 +2751,9 @@ sub runChecker($$$)
         <archives>
             ".get_abs_path($Path2)."
         </archives>");
-    my $Cmd = "perl $0 -l $LibName -old $LibName/v1.xml -new $LibName/v2.xml";
+    my $Cmd = "perl $0 -l $LibName $LibName/v1.xml $LibName/v2.xml";
     if($OSgroup ne "windows") {
-        $Cmd .= " -check-implementation";
+        $Cmd .= " -check-impl";
     }
     if($Browse) {
         $Cmd .= " -b $Browse";
@@ -2753,7 +2770,7 @@ sub runChecker($$$)
     if($Debug)
     {
         $Cmd .= " -debug";
-        print "running $Cmd\n";
+        printMsg("INFO", "running $Cmd");
     }
     system($Cmd);
     my $Report = "compat_reports/$LibName/1.0_to_2.0/compat_report.html";
@@ -2768,10 +2785,10 @@ sub runChecker($$$)
     $NProblems += $SReport->{"method_problems_high"}+$SReport->{"method_problems_medium"};
     $NProblems += $SReport->{"removed"};
     if($NProblems>=100) {
-        print "test result: SUCCESS ($NProblems breaks found)\n\n";
+        printMsg("INFO", "test result: SUCCESS ($NProblems breaks found)\n");
     }
     else {
-        print STDERR "test result: FAILED ($NProblems breaks found)\n\n";
+        printMsg("ERROR", "test result: FAILED ($NProblems breaks found)\n");
     }
 }
 
@@ -3296,7 +3313,7 @@ sub get_Report_Added($)
     {
         foreach my $ClassName (sort {lc($a) cmp lc($b)} keys(%{$MethodAddedInArchiveClass{$ArchiveName}}))
         {
-            $ADDED_METHODS .= "<span class='jar'>$ArchiveName</span>, <span class='cname'>$ClassName.class</span><br/>\n";
+            $ADDED_METHODS .= "<span class='jar'>$ArchiveName</span>, <span class='cname'>".htmlSpecChars($ClassName).".class</span><br/>\n";
             my %NameSpace_Method = ();
             foreach my $Method (keys(%{$MethodAddedInArchiveClass{$ArchiveName}{$ClassName}}))
             {
@@ -3357,7 +3374,7 @@ sub get_Report_Removed($)
     {
         foreach my $ClassName (sort {lc($a) cmp lc($b)} keys(%{$MethodRemovedFromArchiveClass{$ArchiveName}}))
         {
-            $REMOVED_METHODS .= "<span class='jar'>$ArchiveName</span>, <span class='cname'>$ClassName.class</span><br/>\n";
+            $REMOVED_METHODS .= "<span class='jar'>$ArchiveName</span>, <span class='cname'>".htmlSpecChars($ClassName).".class</span><br/>\n";
             my %NameSpace_Method = ();
             foreach my $Method (keys(%{$MethodRemovedFromArchiveClass{$ArchiveName}{$ClassName}}))
             {
@@ -3458,7 +3475,7 @@ sub get_Report_MethodProblems($$)
                                     $Effect = "A client program may be interrupted by <b>NoSuchMethodError</b> exception.";
                                 }
                                 else {
-                                    $Effect = "Recompilation of a client program may be terminated with the message: non-static method $ShortSignature cannot be referenced from a static context.";
+                                    $Effect = "Recompilation of a client program may be terminated with the message: non-static method ".htmlSpecChars($ShortSignature)." cannot be referenced from a static context.";
                                 }
                             }
                             elsif($Kind eq "Changed_Method_Return_From_Void")
@@ -3469,7 +3486,7 @@ sub get_Report_MethodProblems($$)
                             elsif($Kind eq "Static_Method_Became_Final")
                             {# Source Only
                                 $Change = "Method became <b>final</b>.\n";
-                                $Effect = "Recompilation of a client program may be terminated with the message: $ShortSignature in client class C cannot override $ShortSignature in $ClassName_Full; overridden method is final.";
+                                $Effect = "Recompilation of a client program may be terminated with the message: ".htmlSpecChars($ShortSignature)." in client class C cannot override ".htmlSpecChars($ShortSignature)." in ".htmlSpecChars($ClassName_Full)."; overridden method is final.";
                             }
                             elsif($Kind eq "NonStatic_Method_Became_Final")
                             {
@@ -3478,7 +3495,7 @@ sub get_Report_MethodProblems($$)
                                     $Effect = "A client program trying to reimplement this method may be interrupted by <b>VerifyError</b> exception.";
                                 }
                                 else {
-                                    $Effect = "Recompilation of a client program may be terminated with the message: $ShortSignature in client class C cannot override $ShortSignature in $ClassName_Full; overridden method is final.";
+                                    $Effect = "Recompilation of a client program may be terminated with the message: ".htmlSpecChars($ShortSignature)." in client class C cannot override ".htmlSpecChars($ShortSignature)." in ".htmlSpecChars($ClassName_Full)."; overridden method is final.";
                                 }
                             }
                             elsif($Kind eq "Method_Became_Abstract")
@@ -3488,7 +3505,7 @@ sub get_Report_MethodProblems($$)
                                     $Effect = "A client program trying to create an instance of the method's class may be interrupted by <b>InstantiationError</b> exception.";
                                 }
                                 else {
-                                    $Effect = "Recompilation of a client program may be terminated with the message: A client class C is not abstract and does not override abstract method $ShortSignature in $ClassName_Full.";
+                                    $Effect = "Recompilation of a client program may be terminated with the message: A client class C is not abstract and does not override abstract method ".htmlSpecChars($ShortSignature)." in ".htmlSpecChars($ClassName_Full).".";
                                 }
                             }
                             elsif($Kind eq "Method_Became_NonAbstract")
@@ -3513,47 +3530,47 @@ sub get_Report_MethodProblems($$)
                                     $Effect = "A client program may be interrupted by <b>IllegalAccessError</b> exception.";
                                 }
                                 else {
-                                    $Effect = "Recompilation of a client program may be terminated with the message: $ShortSignature has $New_Value access in $ClassName_Full.";
+                                    $Effect = "Recompilation of a client program may be terminated with the message: ".htmlSpecChars($ShortSignature)." has $New_Value access in ".htmlSpecChars($ClassName_Full).".";
                                 }
                             }
                             elsif($Kind eq "Abstract_Method_Added_Checked_Exception")
                             {# Source Only
-                                $Change = "Added <b>$Target</b> exception thrown.\n";
-                                $Effect = "Recompilation of a client program may be terminated with the message: unreported exception $Target must be caught or declared to be thrown.";
+                                $Change = "Added <b>".htmlSpecChars($Target)."</b> exception thrown.\n";
+                                $Effect = "Recompilation of a client program may be terminated with the message: unreported exception ".htmlSpecChars($Target)." must be caught or declared to be thrown.";
                             }
                             elsif($Kind eq "NonAbstract_Method_Added_Checked_Exception")
                             {
-                                $Change = "Added <b>$Target</b> exception thrown.\n";
+                                $Change = "Added <b>".htmlSpecChars($Target)."</b> exception thrown.\n";
                                 if($Level eq "Binary") {
                                     $Effect = "A client program may be interrupted by added exception.";
                                 }
                                 else {
-                                    $Effect = "Recompilation of a client program may be terminated with the message: unreported exception $Target must be caught or declared to be thrown.";
+                                    $Effect = "Recompilation of a client program may be terminated with the message: unreported exception ".htmlSpecChars($Target)." must be caught or declared to be thrown.";
                                 }
                             }
                             elsif($Kind eq "Abstract_Method_Removed_Checked_Exception")
                             {# Source Only
-                                $Change = "Removed <b>$Target</b> exception thrown.\n";
-                                $Effect = "Recompilation of a client program may be terminated with the message: cannot override $ShortSignature in $ClassName_Full; overridden method does not throw $Target.";
+                                $Change = "Removed <b>".htmlSpecChars($Target)."</b> exception thrown.\n";
+                                $Effect = "Recompilation of a client program may be terminated with the message: cannot override ".htmlSpecChars($ShortSignature)." in ".htmlSpecChars($ClassName_Full)."; overridden method does not throw ".htmlSpecChars($Target).".";
                             }
                             elsif($Kind eq "NonAbstract_Method_Removed_Checked_Exception")
                             {
-                                $Change = "Removed <b>$Target</b> exception thrown.\n";
+                                $Change = "Removed <b>".htmlSpecChars($Target)."</b> exception thrown.\n";
                                 if($Level eq "Binary") {
                                     $Effect = "A client program may change behavior because the removed exception will not be thrown any more and client will not catch and handle it.";
                                 }
                                 else {
-                                    $Effect = "Recompilation of a client program may be terminated with the message: cannot override $ShortSignature in $ClassName_Full; overridden method does not throw $Target.";
+                                    $Effect = "Recompilation of a client program may be terminated with the message: cannot override ".htmlSpecChars($ShortSignature)." in ".htmlSpecChars($ClassName_Full)."; overridden method does not throw ".htmlSpecChars($Target).".";
                                 }
                             }
                             elsif($Kind eq "Added_Unchecked_Exception")
                             {# Binary Only
-                                $Change = "Added <b>$Target</b> exception thrown.\n";
+                                $Change = "Added <b>".htmlSpecChars($Target)."</b> exception thrown.\n";
                                 $Effect = "A client program may be interrupted by added exception.";
                             }
                             elsif($Kind eq "Removed_Unchecked_Exception")
                             {# Binary Only
-                                $Change = "Removed <b>$Target</b> exception thrown.\n";
+                                $Change = "Removed <b>".htmlSpecChars($Target)."</b> exception thrown.\n";
                                 $Effect = "A client program may change behavior because the removed exception will not be thrown any more and client will not catch and handle it.";
                             }
                             if($Change)
@@ -3671,7 +3688,7 @@ sub get_Report_TypeProblems($$)
                                 $Effect = "This class became <b>abstract</b> and a client program may be interrupted by <b>InstantiationError</b> exception.";
                             }
                             else {
-                                $Effect = "Recompilation of a client program may be terminated with the message: a client class C is not abstract and does not override abstract method <b>$ShortSignature</b> in <b>$ClassName_Full</b>.";
+                                $Effect = "Recompilation of a client program may be terminated with the message: a client class C is not abstract and does not override abstract method <b>".htmlSpecChars($ShortSignature)."</b> in <b>".htmlSpecChars($ClassName_Full)."</b>.";
                             }
                         }
                         elsif($Kind eq "Abstract_Class_Added_Abstract_Method")
@@ -3689,7 +3706,7 @@ sub get_Report_TypeProblems($$)
                                 }
                             }
                             else {
-                                $Effect = "Recompilation of a client program may be terminated with the message: a client class C is not abstract and does not override abstract method <b>$ShortSignature</b> in <b>$ClassName_Full</b>.";
+                                $Effect = "Recompilation of a client program may be terminated with the message: a client class C is not abstract and does not override abstract method <b>".htmlSpecChars($ShortSignature)."</b> in <b>".htmlSpecChars($ClassName_Full)."</b>.";
                             }
                         }
                         elsif($Kind eq "Class_Removed_Abstract_Method"
@@ -3702,7 +3719,7 @@ sub get_Report_TypeProblems($$)
                                 $Effect = "A client program may be interrupted by <b>NoSuchMethodError</b> exception.";
                             }
                             else {
-                                $Effect = "Recompilation of a client program may be terminated with the message: cannot find method <b>$ShortSignature</b> in $Type_Type <b>$ClassName_Full</b>.";
+                                $Effect = "Recompilation of a client program may be terminated with the message: cannot find method <b>".htmlSpecChars($ShortSignature)."</b> in $Type_Type <b>".htmlSpecChars($ClassName_Full)."</b>.";
                             }
                         }
                         elsif($Kind eq "Interface_Added_Abstract_Method")
@@ -3720,7 +3737,7 @@ sub get_Report_TypeProblems($$)
                                 }
                             }
                             else {
-                                $Effect = "Recompilation of a client program may be terminated with the message: a client class C is not abstract and does not override abstract method <b>$ShortSignature</b> in <b>$ClassName_Full</b>.";
+                                $Effect = "Recompilation of a client program may be terminated with the message: a client class C is not abstract and does not override abstract method <b>".htmlSpecChars($ShortSignature)."</b> in <b>".htmlSpecChars($ClassName_Full)."</b>.";
                             }
                         }
                         elsif($Kind eq "Class_Method_Became_Abstract")
@@ -3732,7 +3749,7 @@ sub get_Report_TypeProblems($$)
                                 $Effect = "A client program may be interrupted by <b>InstantiationError</b> exception.";
                             }
                             else {
-                                $Effect = "Recompilation of a client program may be terminated with the message: a client class C is not abstract and does not override abstract method <b>$ShortSignature</b> in <b>$ClassName_Full</b>.";
+                                $Effect = "Recompilation of a client program may be terminated with the message: a client class C is not abstract and does not override abstract method <b>".htmlSpecChars($ShortSignature)."</b> in <b>".htmlSpecChars($ClassName_Full)."</b>.";
                             }
                         }
                         elsif($Kind eq "Class_Method_Became_NonAbstract")
@@ -3763,7 +3780,7 @@ sub get_Report_TypeProblems($$)
                                 }
                             }
                             else {
-                                $Effect = "Recompilation of a client program may be terminated with the message: a client class C is not abstract and does not override abstract method in <b>$TypeName</b>.";
+                                $Effect = "Recompilation of a client program may be terminated with the message: a client class C is not abstract and does not override abstract method in <b>".htmlSpecChars($TypeName)."</b>.";
                             }
                         }
                         elsif($Kind eq "Interface_Added_Super_Interface")
@@ -3779,7 +3796,7 @@ sub get_Report_TypeProblems($$)
                                 }
                             }
                             else {
-                                $Effect = "Recompilation of a client program may be terminated with the message: a client class C is not abstract and does not override abstract method in <b>$Target</b>.";
+                                $Effect = "Recompilation of a client program may be terminated with the message: a client class C is not abstract and does not override abstract method in <b>".htmlSpecChars($Target)."</b>.";
                             }
                         }
                         elsif($Kind eq "Interface_Added_Super_Constant_Interface")
@@ -3800,13 +3817,13 @@ sub get_Report_TypeProblems($$)
                                 $Effect = "A client program may be interrupted by <b>NoSuchMethodError</b> exception.";
                             }
                             else {
-                                $Effect = "Recompilation of a client program may be terminated with the message: cannot find method in $Type_Type <b>$TypeName</b>.";
+                                $Effect = "Recompilation of a client program may be terminated with the message: cannot find method in $Type_Type <b>".htmlSpecChars($TypeName)."</b>.";
                             }
                         }
                         elsif($Kind eq "Interface_Removed_Super_Constant_Interface")
                         {# Source Only
                             $Change = "Removed super-interface <b>".htmlSpecChars($Target)."</b> containing constants only.";
-                            $Effect = "Recompilation of a client program may be terminated with the message: cannot find variable in $Type_Type <b>$TypeName</b>.";
+                            $Effect = "Recompilation of a client program may be terminated with the message: cannot find variable in $Type_Type <b>".htmlSpecChars($TypeName)."</b>.";
                         }
                         elsif($Kind eq "Added_Super_Class")
                         {
@@ -3831,7 +3848,7 @@ sub get_Report_TypeProblems($$)
                                 }
                             }
                             else {
-                                $Effect = "Recompilation of a client program may be terminated with the message: a client class C is not abstract and does not override abstract method in <b>$Target</b>.";
+                                $Effect = "Recompilation of a client program may be terminated with the message: a client class C is not abstract and does not override abstract method in <b>".htmlSpecChars($Target)."</b>.";
                             }
                         }
                         elsif($Kind eq "Removed_Super_Class")
@@ -3841,7 +3858,7 @@ sub get_Report_TypeProblems($$)
                                 $Effect = "Access of a client program to the fields or methods of the old super-class may be interrupted by <b>NoSuchFieldError</b> or <b>NoSuchMethodError</b> exceptions.";
                             }
                             else {
-                                $Effect = "Recompilation of a client program may be terminated with the message: cannot find variable (or method) in <b>$TypeName</b>.";
+                                $Effect = "Recompilation of a client program may be terminated with the message: cannot find variable (or method) in <b>".htmlSpecChars($TypeName)."</b>.";
                             }
                         }
                         elsif($Kind eq "Changed_Super_Class")
@@ -3851,7 +3868,7 @@ sub get_Report_TypeProblems($$)
                                 $Effect = "1) Access of a client program to the fields or methods of the old super-class may be interrupted by <b>NoSuchFieldError</b> or <b>NoSuchMethodError</b> exceptions.<br/>2) A static field from a super-interface of a client class may hide a field (with the same name) inherited from new super-class and cause <b>IncompatibleClassChangeError</b> exception.";
                             }
                             else {
-                                $Effect = "1) Recompilation of a client program may be terminated with the message: cannot find variable (or method) in <b>$TypeName</b>.<br/>2) A static field from a super-interface of a client class may hide a field (with the same name) inherited from new super-class. Recompilation of a client class may be terminated with the message: reference to variable is ambiguous.";
+                                $Effect = "1) Recompilation of a client program may be terminated with the message: cannot find variable (or method) in <b>".htmlSpecChars($TypeName)."</b>.<br/>2) A static field from a super-interface of a client class may hide a field (with the same name) inherited from new super-class. Recompilation of a client class may be terminated with the message: reference to variable is ambiguous.";
                             }
                         }
                         elsif($Kind eq "Class_Added_Field")
@@ -3881,38 +3898,38 @@ sub get_Report_TypeProblems($$)
                                 $Effect = "A client program may be interrupted by <b>NoSuchFieldError</b> exception.";
                             }
                             else {
-                                $Effect = "Recompilation of a client program may be terminated with the message: cannot find variable <b>$Target</b> in <b>$TypeName</b>.";
+                                $Effect = "Recompilation of a client program may be terminated with the message: cannot find variable <b>$Target</b> in <b>".htmlSpecChars($TypeName)."</b>.";
                             }
                         }
                         elsif($Kind eq "Renamed_Constant_Field")
                         {
                             if($Level eq "Binary") {
-                                $Change = "Field <b>$Target</b> ($Field_Type) with the compile-time constant value <b>$Field_Value</b> has been renamed to <b>".htmlSpecChars($New_Value)."</b>.";
+                                $Change = "Field <b>$Target</b> (".htmlSpecChars($Field_Type).") with the compile-time constant value <b>$Field_Value</b> has been renamed to <b>".htmlSpecChars($New_Value)."</b>.";
                                 $Effect = "A client program may change behavior.";
                             }
                             else {
                                 $Change = "Field <b>$Target</b> has been renamed to <b>".htmlSpecChars($New_Value)."</b>.";
-                                $Effect = "Recompilation of a client program may be terminated with the message: cannot find variable <b>$Target</b> in <b>$TypeName</b>.";
+                                $Effect = "Recompilation of a client program may be terminated with the message: cannot find variable <b>$Target</b> in <b>".htmlSpecChars($TypeName)."</b>.";
                             }
                         }
                         elsif($Kind eq "Removed_NonConstant_Field")
                         {
-                            $Change = "Field <b>$Target</b> ($Field_Type) has been removed from this $Type_Type.";
+                            $Change = "Field <b>$Target</b> (".htmlSpecChars($Field_Type).") has been removed from this $Type_Type.";
                             if($Level eq "Binary") {
                                 $Effect = "A client program may be interrupted by <b>NoSuchFieldError</b> exception.";
                             }
                             else {
-                                $Effect = "Recompilation of a client program may be terminated with the message: cannot find variable <b>$Target</b> in <b>$TypeName</b>.";
+                                $Effect = "Recompilation of a client program may be terminated with the message: cannot find variable <b>$Target</b> in <b>".htmlSpecChars($TypeName)."</b>.";
                             }
                         }
                         elsif($Kind eq "Removed_Constant_Field")
                         {
-                            $Change = "Field <b>$Target</b> ($Field_Type) with the compile-time constant value <b>$Field_Value</b> has been removed from this $Type_Type.";
+                            $Change = "Field <b>$Target</b> (".htmlSpecChars($Field_Type).") with the compile-time constant value <b>$Field_Value</b> has been removed from this $Type_Type.";
                             if($Level eq "Binary") {
                                 $Effect = "A client program may change behavior.";
                             }
                             else {
-                                $Effect = "Recompilation of a client program may be terminated with the message: cannot find variable <b>$Target</b> in <b>$TypeName</b>.";
+                                $Effect = "Recompilation of a client program may be terminated with the message: cannot find variable <b>$Target</b> in <b>".htmlSpecChars($TypeName)."</b>.";
                             }
                         }
                         elsif($Kind eq "Changed_Field_Type")
@@ -3922,27 +3939,27 @@ sub get_Report_TypeProblems($$)
                                 $Effect = "A client program may be interrupted by <b>NoSuchFieldError</b> exception.";
                             }
                             else {
-                                $Effect = "Recompilation of a client program may be terminated with the message: incompatible types, found: <b>$Old_Value</b>, required: <b>$New_Value</b>.";
+                                $Effect = "Recompilation of a client program may be terminated with the message: incompatible types, found: <b>".htmlSpecChars($Old_Value)."</b>, required: <b>".htmlSpecChars($New_Value)."</b>.";
                             }
                         }
                         elsif($Kind eq "Changed_Field_Access")
                         {
-                            $Change = "Access level of field <b>$Target</b> has been changed from <span class='nowrap'><b>".htmlSpecChars($Old_Value)."</b></span> to <span class='nowrap'><b>".htmlSpecChars($New_Value)."</b></span>.";
+                            $Change = "Access level of field <b>$Target</b> has been changed from <span class='nowrap'><b>$Old_Value</b></span> to <span class='nowrap'><b>$New_Value</b></span>.";
                             if($Level eq "Binary") {
                                 $Effect = "A client program may be interrupted by <b>IllegalAccessError</b> exception.";
                             }
                             else
                             {
                                 if($New_Value eq "package-private") {
-                                    $Effect = "Recompilation of a client program may be terminated with the message: <b>$Target</b> is not public in <b>$TypeName</b>; cannot be accessed from outside package.";
+                                    $Effect = "Recompilation of a client program may be terminated with the message: <b>$Target</b> is not public in <b>".htmlSpecChars($TypeName)."</b>; cannot be accessed from outside package.";
                                 }
                                 else {
-                                    $Effect = "Recompilation of a client program may be terminated with the message: <b>$Target</b> has <b>$New_Value</b> access in <b>$TypeName</b>.";
+                                    $Effect = "Recompilation of a client program may be terminated with the message: <b>$Target</b> has <b>$New_Value</b> access in <b>".htmlSpecChars($TypeName)."</b>.";
                                 }
                             }
                         }
                         elsif($Kind eq "Changed_Final_Field_Value")
-                        {# Binary Only
+                        { # Binary Only
                             $Change = "Value of final field <b>$Target</b> (<b>$Field_Type</b>) has been changed from <span class='nowrap'><b>".htmlSpecChars($Old_Value)."</b></span> to <span class='nowrap'><b>".htmlSpecChars($New_Value)."</b></span>.";
                             $Effect = "Old value of the field will be inlined to the client code at compile-time and will be used instead of a new one.";
                         }
@@ -3957,12 +3974,12 @@ sub get_Report_TypeProblems($$)
                             }
                         }
                         elsif($Kind eq "Field_Became_NonFinal")
-                        {# Binary Only
+                        { # Binary Only
                             $Change = "Field <b>$Target</b> became <b>non-final</b>.";
                             $Effect = "Old value of the field will be inlined to the client code at compile-time and will be used instead of a new one.";
                         }
                         elsif($Kind eq "NonConstant_Field_Became_Static")
-                        {# Binary Only
+                        { # Binary Only
                             $Change = "Non-final field <b>$Target</b> became <b>static</b>.";
                             $Effect = "A client program may be interrupted by <b>IncompatibleClassChangeError</b> exception.";
                         }
@@ -3978,7 +3995,7 @@ sub get_Report_TypeProblems($$)
                             }
                         }
                         elsif($Kind eq "Constant_Field_Became_NonStatic")
-                        {# Source Only
+                        { # Source Only
                             $Change = "Field <b>$Target</b> became <b>non-static</b>.";
                             $Effect = "Recompilation of a client program may be terminated with the message: non-static variable <b>$Target</b> cannot be referenced from a static context.";
                         }
@@ -3989,7 +4006,7 @@ sub get_Report_TypeProblems($$)
                                 $Effect = "A client program may be interrupted by <b>IncompatibleClassChangeError</b> or <b>InstantiationError</b> exception dependent on the usage of this class.";
                             }
                             else {
-                                $Effect = "Recompilation of a client program may be terminated with the message: <b>$TypeName</b> is abstract; cannot be instantiated.";
+                                $Effect = "Recompilation of a client program may be terminated with the message: <b>".htmlSpecChars($TypeName)."</b> is abstract; cannot be instantiated.";
                             }
                         }
                         elsif($Kind eq "Interface_Became_Class")
@@ -4009,7 +4026,7 @@ sub get_Report_TypeProblems($$)
                                 $Effect = "A client program may be interrupted by <b>VerifyError</b> exception.";
                             }
                             else {
-                                $Effect = "Recompilation of a client program may be terminated with the message: cannot inherit from final <b>$TypeName</b>.";
+                                $Effect = "Recompilation of a client program may be terminated with the message: cannot inherit from final <b>".htmlSpecChars($TypeName)."</b>.";
                             }
                         }
                         elsif($Kind eq "Class_Became_Abstract")
@@ -4019,7 +4036,7 @@ sub get_Report_TypeProblems($$)
                                 $Effect = "A client program may be interrupted by <b>InstantiationError</b> exception.";
                             }
                             else {
-                                $Effect = "Recompilation of a client program may be terminated with the message: <b>$TypeName</b> is abstract; cannot be instantiated.";
+                                $Effect = "Recompilation of a client program may be terminated with the message: <b>".htmlSpecChars($TypeName)."</b> is abstract; cannot be instantiated.";
                             }
                         }
                         elsif($Kind eq "Removed_Class")
@@ -4029,7 +4046,7 @@ sub get_Report_TypeProblems($$)
                                 $Effect = "A client program may be interrupted by <b>NoClassDefFoundError</b> exception.";
                             }
                             else {
-                                $Effect = "Recompilation of a client program may be terminated with the message: cannot find class <b>$TypeName</b>.";
+                                $Effect = "Recompilation of a client program may be terminated with the message: cannot find class <b>".htmlSpecChars($TypeName)."</b>.";
                             }
                         }
                         elsif($Kind eq "Removed_Interface")
@@ -4039,7 +4056,7 @@ sub get_Report_TypeProblems($$)
                                 $Effect = "A client program may be interrupted by <b>NoClassDefFoundError</b> exception.";
                             }
                             else {
-                                $Effect = "Recompilation of a client program may be terminated with the message: cannot find class <b>$TypeName</b>.";
+                                $Effect = "Recompilation of a client program may be terminated with the message: cannot find class <b>".htmlSpecChars($TypeName)."</b>.";
                             }
                         }
                         if($Change)
@@ -4156,7 +4173,7 @@ sub getAffectDescription($$$$)
             return "This$ABSTRACT_M $METHOD_TYPE is from \'$Type_Name\'$ABSTRACT_C $Type_Type.";
         }
         if($Location_To_Type=~/RetVal/)
-        {# return value
+        { # return value
             if($Location_To_Type=~/\./) {
                 push(@Sentence_Parts, "Field \'".htmlSpecChars($Location_To_Type)."\' in return value");
             }
@@ -4165,11 +4182,11 @@ sub getAffectDescription($$$$)
             }
         }
         elsif($Location_To_Type=~/this/)
-        {# "this" reference
+        { # "this" reference
             push(@Sentence_Parts, "Field \'".htmlSpecChars($Location_To_Type)."\' in the object");
         }
         else
-        {# parameters
+        { # parameters
             if($Location_To_Type=~/\./) {
                 push(@Sentence_Parts, "Field \'".htmlSpecChars($Location_To_Type)."\' in $Parameter_Position_Str parameter");
             }
@@ -4453,6 +4470,7 @@ sub getReport($)
         padding-left:15px;
         font-size:14px;
         cursor:text;
+        color:#444444;
     }
     span.color_p {
         font-style:italic;
@@ -4732,7 +4750,7 @@ sub readArchives($)
     if($#ArchivePaths==-1) {
         exitStatus("Error", "Java ARchives are not found in ".$Descriptor{$LibVersion}{"Version"});
     }
-    print "reading classes ".$Descriptor{$LibVersion}{"Version"}." ...\n";
+    printMsg("INFO", "reading classes ".$Descriptor{$LibVersion}{"Version"}." ...");
     $TypeID = 0;
     foreach my $ArchivePath (sort {length($a)<=>length($b)} @ArchivePaths) {
         readArchive($LibVersion, $ArchivePath);
@@ -4759,7 +4777,7 @@ sub readArchives($)
 
 sub testSystem()
 {
-    print "\nverifying detectable Java library changes\n";
+    printMsg("INFO", "\nverifying detectable Java library changes");
     my $LibName = "libsample_java";
     rmtree($LibName);
     my $PackageName = "TestPackage";
@@ -5771,7 +5789,8 @@ sub testSystem()
     # Use
     writeFile($Path_v1."/Use.java",
     "package $PackageName;
-    public class Use {
+    public class Use
+    {
         public FieldBecameFinal field;
         public void someMethod(FieldBecameFinal[] param) { };
         public void someMethod(Use param) { };
@@ -5793,7 +5812,8 @@ sub testSystem()
     }");
     writeFile($Path_v2."/Use.java",
     "package $PackageName;
-    public class Use {
+    public class Use
+    {
         public FieldBecameFinal field;
         public void someMethod(FieldBecameFinal[] param) { };
         public void someMethod(Use param) { };
@@ -6019,7 +6039,7 @@ sub readClasses($$$)
         $Cmd .= " -c -verbose";
     }
     chdir($TMP_DIR);
-    system($Cmd." ".$Input." >\"$Output\"");
+    system($Cmd." ".$Input." >\"$Output\" 2>\"$TMP_DIR/warn\"");
     chdir($ORIG_DIR);
     if(not -e $Output) {
         exitStatus("Error", "internal error in parser, try to reduce MAX_ARGS");
@@ -6039,6 +6059,11 @@ sub readClasses($$$)
         my $LINE = $Content[$LineNum++];
         next if($LINE=~/\A\s*(?:const|#\d|AnnotationDefault|Compiled|Source|Constant|RuntimeVisibleAnnotations)/);
         next if($LINE=~/\sof\s|\sline \d+:|\[\s*class|= \[| \$|\$\d| class\$/);
+        if(index($LINE, "<V"))
+        { # Java 7: templates
+          # <V extends java.lang.Object>
+            $LINE=~s/<V .+?>/<V>/;
+        }
         $LINE=~s/\s*,\s*/,/g;
         $LINE=~s/\$/#/g;
         if(index($LINE, "LocalVariableTable")!=-1) {
@@ -6057,7 +6082,7 @@ sub readClasses($$$)
                 if($CheckImpl) {
                     $MethodBody{$LibVersion}{$CurrentMethod} .= "$1\n";
                 }
-                if($LINE=~/\/\/(Method|InterfaceMethod)\s+(.+)\Z/)
+                if($LINE=~/\/\/\s*(Method|InterfaceMethod)\s+(.+)\Z/)
                 {
                     my $InvokedName = $2;
                     if($LibVersion==2)
@@ -6123,8 +6148,8 @@ sub readClasses($$$)
                     $MethodAttr{"Exceptions"}{registerType($E, $LibVersion)} = 1;
                 }
             }
-            if($LINE=~/\A(public|protected|private)\s+/) {
-                $MethodAttr{"Access"} = $1;
+            if($LINE=~/(\A|\s+)(public|protected|private)\s+/) {
+                $MethodAttr{"Access"} = $2;
             }
             else {
                 $MethodAttr{"Access"} = "package-private";
@@ -6220,8 +6245,8 @@ sub readClasses($$$)
             if($LINE=~/(\A|\s+)volatile\s+/) {
                 $TypeAttr{"Fields"}{$FName}{"Volatile"} = 1;
             }
-            if($LINE=~/\A(public|protected|private)\s+/) {
-                $TypeAttr{"Fields"}{$FName}{"Access"} = $1;
+            if($LINE=~/(\A|\s+)(public|protected|private)\s+/) {
+                $TypeAttr{"Fields"}{$FName}{"Access"} = $2;
             }
             else {
                 $TypeAttr{"Fields"}{$FName}{"Access"} = "package-private";
@@ -6238,9 +6263,15 @@ sub readClasses($$$)
                     $TypeAttr{"Fields"}{$FName}{"Mangled"} = $PackageName."/".$CurrentClass.".".$FName.":".$FSignature;
                 }
             }
+            if($Content[$LineNum]=~/flags:/i)
+            { # flags: ACC_PUBLIC, ACC_STATIC, ACC_FINAL
+                $LineNum++;
+            }
             # read the Value
-            if($Content[$LineNum]=~/Constant\s+value:\s*([^\s]+)\s(.*)\Z/i)
+            if($Content[$LineNum]=~/Constant\s*value:\s*([^\s]+)\s(.*)\Z/i)
             {
+              # Java 6: Constant value: ...
+              # Java 7: ConstantValue: ...
                 $LineNum+=1;
                 my ($TName, $Value) = ($1, $2);
                 if($Value) {
@@ -6256,6 +6287,11 @@ sub readClasses($$$)
         }
         elsif($LINE=~/(\A|\s+)(class|interface)\s+([^\s\{]+)(\s+|\{|\Z)/)
         { # properties of classes and interfaces
+            if($TypeAttr{"Name"})
+            { # register previous
+                %{$TypeInfo{$LibVersion}{registerType($TypeAttr{"Name"}, $LibVersion)}} = %TypeAttr;
+            }
+            
             %TypeAttr = ("Type"=>$2, "Name"=>$3); # reset previous class
             $FieldPos = 0; # reset field position
             $CurrentMethod = ""; # reset current method
@@ -6275,8 +6311,8 @@ sub readClasses($$$)
             { # javax.swing.text.GlyphView.GlyphPainter <=> GlyphView$GlyphPainter
                 $TypeAttr{"Name"}=~s/#/./g;
             }
-            if($LINE=~/\A(public|protected|private)\s+/) {
-                $TypeAttr{"Access"} = $1;
+            if($LINE=~/(\A|\s+)(public|protected|private)\s+/) {
+                $TypeAttr{"Access"} = $2;
             }
             else {
                 $TypeAttr{"Access"} = "package-private";
@@ -6319,6 +6355,9 @@ sub readClasses($$$)
         else {
             # unparsed
         }
+    }
+    if($TypeAttr{"Name"})
+    { # register last
         %{$TypeInfo{$LibVersion}{registerType($TypeAttr{"Name"}, $LibVersion)}} = %TypeAttr;
     }
 }
@@ -6533,12 +6572,6 @@ sub resolve_symlink($)
     }
 }
 
-sub genDescriptorTemplate()
-{
-    writeFile("VERSION.xml", $Descriptor_Template."\n");
-    print "descriptor template VERSION.xml has been generated into the current directory\n";
-}
-
 sub cmpVersions($$)
 {# compare two version strings in dotted-numeric format
     my ($V1, $V2) = @_;
@@ -6720,17 +6753,17 @@ sub checkVersionNum($$)
         if($VerNum)
         {
             $TargetVersion{$LibVersion} = $VerNum;
-            print STDERR "WARNING: set ".($LibVersion==1?"1st":"2nd")." version number to $VerNum (use -v$LibVersion <num> option to change it)\n";
+            printMsg("WARNING", "set ".($LibVersion==1?"1st":"2nd")." version number to $VerNum (use -v$LibVersion option to change it)");
             return $TargetVersion{$LibVersion};
         }
     }
     if($Alt)
     {
         if($DumpAPI) {
-            exitStatus("Error", "version number is not set (use -vnum <num> option)");
+            exitStatus("Error", "version number is not set (use -vnum option)");
         }
         else {
-            exitStatus("Error", ($LibVersion==1?"1st":"2nd")." version number is not set (use -v$LibVersion <num> option)");
+            exitStatus("Error", ($LibVersion==1?"1st":"2nd")." version number is not set (use -v$LibVersion option)");
         }
     }
 }
@@ -6769,17 +6802,19 @@ sub getPkgVersion($)
 {
     my $Name = $_[0];
     $Name=~s/\.\w+\Z//;
-    if($Name=~/\A(.+[a-z])[\-\_](\d.+?)\Z/i)
+    if($Name=~/\A(.+[a-z])[\-\_](v|ver|)(\d.+?)\Z/i)
     { # libsample-N
-        return ($1, $2);
-    }
-    elsif($Name=~/\A(.+)[\-\_](.+?)\Z/i)
-    { # libsample-N
-        return ($1, $2);
+      # libsample-vN
+        return ($1, $3);
     }
     elsif($Name=~/\A(.+?)(\d[\d\.]*)\Z/i)
     { # libsampleN
         return ($1, $2);
+    }
+    elsif($Name=~/\A(.+)[\-\_](v|ver|)(.+?)\Z/i)
+    { # libsample-N
+      # libsample-vN
+        return ($1, $3);
     }
     elsif($Name=~/\A([a-z_\-]+)(\d.+?)\Z/i)
     { # libsampleNb
@@ -6872,6 +6907,16 @@ sub detect_default_paths()
     detect_bin_default_paths();
     foreach my $Path (keys(%DefaultBinPaths)) {
         $SystemPaths{"bin"}{$Path} = $DefaultBinPaths{$Path};
+    }
+    
+    if(my $JavaCmd = get_CmdPath("java"))
+    {
+        if(my $Ver = `$JavaCmd -version 2>&1`)
+        {
+            if($Ver=~/java version "(.+)\"/) {
+                printMsg("INFO", "Using Java $1");
+            }
+        }
     }
 }
 
@@ -7092,12 +7137,14 @@ sub scenario()
         HELP_MESSAGE();
         exit(0);
     }
-    if(defined $ShowVersion) {
-        print "Java API Compliance Checker (Java ACC) $TOOL_VERSION\nCopyright (C) 2012 ROSA Lab\nLicense: LGPL or GPL <http://www.gnu.org/licenses/>\nThis program is free software: you can redistribute it and/or modify it.\n\nWritten by Andrey Ponomarenko.\n";
+    if(defined $ShowVersion)
+    {
+        printMsg("INFO", "Java API Compliance Checker (Java ACC) $TOOL_VERSION\nCopyright (C) 2012 ROSA Lab\nLicense: LGPL or GPL <http://www.gnu.org/licenses/>\nThis program is free software: you can redistribute it and/or modify it.\n\nWritten by Andrey Ponomarenko.");
         exit(0);
     }
-    if(defined $DumpVersion) {
-        print $TOOL_VERSION."\n";
+    if(defined $DumpVersion)
+    {
+        printMsg("INFO", $TOOL_VERSION);
         exit(0);
     }
     $Data::Dumper::Sortkeys = 1;
@@ -7109,13 +7156,18 @@ sub scenario()
         $Data::Dumper::Sortkeys = \&dump_sorting;
     }
     
-    detect_default_paths();
-    if(defined $TestSystem) {
+    
+    
+    if(defined $TestSystem)
+    {
+        detect_default_paths();
         testSystem();
         exit(0);
     }
-    if($GenerateDescriptor) {
-        genDescriptorTemplate();
+    if($GenerateDescriptor)
+    {
+        writeFile("VERSION.xml", $Descriptor_Template."\n");
+        printMsg("INFO", "descriptor template VERSION.xml has been generated into the current directory");
         exit(0);
     }
     if(not $TargetLibraryName)
@@ -7123,7 +7175,7 @@ sub scenario()
         if($DumpAPI)
         {
             if($DumpAPI=~/\.jar\Z/)
-            { # short usage: -old OLD.jar -new NEW.jar
+            { # short usage
                 my ($Name, $Version) = getPkgVersion(get_filename($DumpAPI));
                 if($Name and $Version ne "")
                 {
@@ -7137,7 +7189,7 @@ sub scenario()
         else
         {
             if($Descriptor{1}{"Path"}=~/\.jar\Z/ and $Descriptor{1}{"Path"}=~/\.jar\Z/)
-            { # short usage: -old OLD.jar -new NEW.jar
+            { # short usage
                 my ($Name1, $Version1) = getPkgVersion(get_filename($Descriptor{1}{"Path"}));
                 my ($Name2, $Version2) = getPkgVersion(get_filename($Descriptor{2}{"Path"}));
                 if($Name1 and $Version1 ne "" and $Version2 ne "")
@@ -7153,7 +7205,7 @@ sub scenario()
             }
         }
         if(not $TargetLibraryName) {
-            exitStatus("Error", "library name is not selected (option -l <name>)");
+            exitStatus("Error", "library name is not selected (option -l)");
         }
     }
     else
@@ -7204,6 +7256,7 @@ sub scenario()
                 exitStatus("Access_Error", "can't access \'$Part\'");
             }
         }
+        detect_default_paths();
         checkVersionNum(1, $DumpAPI);
         my $TarCmd = get_CmdPath("tar");
         if(not $TarCmd) {
@@ -7222,7 +7275,7 @@ sub scenario()
         initLogging(1);
         readArchives(1);
         my %LibraryAPI = ();
-        print "creating library API dump ...\n";
+        printMsg("INFO", "creating library API dump ...");
         $LibraryAPI{"MethodInfo"} = $MethodInfo{1};
         $LibraryAPI{"TypeInfo"} = $TypeInfo{1};
         $LibraryAPI{"Version"} = $Descriptor{1}{"Version"};
@@ -7241,8 +7294,8 @@ sub scenario()
             exitStatus("Error", "can't create API dump because something is going wrong with the Data::Dumper module");
         }
         my $Pkg = createArchive($DPath, $DDir);
-        print "library API has been dumped to:\n  $Pkg\n";
-        print "you can transfer this dump everywhere and use instead of the ".$Descriptor{1}{"Version"}." version descriptor\n";
+        printMsg("INFO", "library API has been dumped to:\n  $Pkg");
+        printMsg("INFO", "you can transfer this dump everywhere and use instead of the ".$Descriptor{1}{"Version"}." version descriptor");
         exit(0);
     }
     if(not $Descriptor{1}{"Path"}) {
@@ -7279,6 +7332,9 @@ sub scenario()
     }
     initLogging(1);
     initLogging(2);
+    
+    detect_default_paths();
+    
     if($Descriptor{1}{"Archives"}
     and not $Descriptor{1}{"Dump"}) {
         readArchives(1);
@@ -7309,7 +7365,7 @@ sub scenario()
     detectAdded();
     detectRemoved();
     
-    print "comparing classes ...\n";
+    printMsg("INFO", "comparing classes ...");
     mergeClasses();
     
     mergeMethods();
