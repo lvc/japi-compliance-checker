@@ -4170,7 +4170,7 @@ sub getAffectDescription($$$$)
     elsif($TypeProblems_Kind{$Level}{$Kind})
     {
         if($Location_To_Type eq "this") {
-            return "This$ABSTRACT_M $METHOD_TYPE is from \'$Type_Name\'$ABSTRACT_C $Type_Type.";
+            return "This$ABSTRACT_M $METHOD_TYPE is from \'".htmlSpecChars($Type_Name)."\'$ABSTRACT_C $Type_Type.";
         }
         if($Location_To_Type=~/RetVal/)
         { # return value
