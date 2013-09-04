@@ -1,15 +1,15 @@
 
 Copyright (C) 2011 Institute for System Programming, RAS
 Copyright (C) 2011 Russian Linux Verification Center
-Copyright (C) 2011-2012 ROSA Lab
+Copyright (C) 2011-2013 ROSA Laboratory
 All rights reserved.
 
 
 RELEASE INFORMATION
 
 Project:           Java API Compliance Checker (Java ACC)
-Version:           1.3.1
-Date:              2012-12-14
+Version:           1.3.2
+Date:              2013-09-04
 
 
 This file explains how to install and setup environment
