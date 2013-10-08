@@ -1,11 +1,11 @@
 #!/usr/bin/perl
 ###########################################################################
-# Java API Compliance Checker (Java ACC) 1.3.1
+# Java API Compliance Checker (Java ACC) 1.3.3
 # A tool for checking backward compatibility of a Java library API
 #
 # Copyright (C) 2011 Institute for System Programming, RAS
 # Copyright (C) 2011 Russian Linux Verification Center
-# Copyright (C) 2011-2012 ROSA Lab
+# Copyright (C) 2011-2013 ROSA Lab
 #
 # Written by Andrey Ponomarenko
 #
@@ -45,7 +45,7 @@ use Cwd qw(abs_path cwd);
 use Data::Dumper;
 use Config;
 
-my $TOOL_VERSION = "1.3.1";
+my $TOOL_VERSION = "1.3.3";
 my $API_DUMP_VERSION = "1.0";
 my $API_DUMP_MAJOR = majorVersion($API_DUMP_VERSION);
 
@@ -60,7 +60,7 @@ my $CmdName = get_filename($0);
 my $OSgroup = get_OSgroup();
 my $ORIG_DIR = cwd();
 my $TMP_DIR = tempdir(CLEANUP=>1);
-my $MAX_ARGS = ($OSgroup eq "windows")?100:1200;
+my $ARG_MAX = get_ARG_MAX();
 
 my %OS_Archive = (
     "windows"=>"zip",
@@ -94,7 +94,7 @@ my %HomePage = (
 
 my $ShortUsage = "Java API Compliance Checker (Java ACC) $TOOL_VERSION
 A tool for checking backward compatibility of a Java library API
-Copyright (C) 2012 ROSA Lab
+Copyright (C) 2013 ROSA Lab
 License: GNU LGPL or GNU GPL
 
 Usage: $CmdName [options]
@@ -5903,7 +5903,7 @@ sub readArchive($$)
     
     if($#Classes!=-1)
     {
-        foreach my $PartRef (divideArray(\@Classes, $MAX_ARGS)) {
+        foreach my $PartRef (divideArray(\@Classes)) {
             readClasses($PartRef, $LibVersion, get_filename($Path));
         }
     }
@@ -5922,20 +5922,40 @@ sub native_path($)
     return $Path;
 }
 
-sub divideArray($$)
+sub divideArray($)
 {
-    my ($ArrayRef, $Size) = @_;
-    return () if(not $ArrayRef);
-    my @Array = @{$ArrayRef};
-    return () if($#Array==-1);
-    if($#Array>$Size)
+    my $ArrRef = $_[0];
+    return () if(not $ArrRef);
+    my @Array = @{$ArrRef};
+    return () if($#{$ArrRef}==-1);
+    
+    my @Res = ();
+    my $Sub = [];
+    my $Len = 0;
+    
+    foreach my $Pos (0 .. $#{$ArrRef})
     {
-        my @Part = splice(@Array, 0, $Size);
-        return (\@Part, divideArray(\@Array, $Size));
+        my $Arg = $ArrRef->[$Pos];
+        my $Arg_L = length($Arg) + 1; # space
+        if($Len < $ARG_MAX - 250)
+        {
+            push(@{$Sub}, $Arg);
+            $Len += $Arg_L;
+        }
+        else
+        {
+            push(@Res, $Sub);
+            
+            $Sub = [$Arg];
+            $Len = $Arg_L;
+        }
     }
-    else {
-        return ($ArrayRef);
+    
+    if($#{$Sub}!=-1) {
+        push(@Res, $Sub);
     }
+    
+    return @Res;
 }
 
 sub readUsage_Client($)
@@ -6042,7 +6062,7 @@ sub readClasses($$$)
     system($Cmd." ".$Input." >\"$Output\" 2>\"$TMP_DIR/warn\"");
     chdir($ORIG_DIR);
     if(not -e $Output) {
-        exitStatus("Error", "internal error in parser, try to reduce MAX_ARGS");
+        exitStatus("Error", "internal error in parser, try to reduce ARG_MAX");
     }
     if($Debug) {
         appendFile($DEBUG_PATH{$LibVersion}."/class-dump.txt", readFile($Output));
@@ -6200,6 +6220,7 @@ sub readClasses($$$)
                     $MethodAttr{"Synchronized"} = 1;
                 }
             }
+            
             # read the Signature
             if($Content[$LineNum++]=~/Signature:\s*(.+)\Z/i)
             { # create run-time unique name ( java/io/PrintStream.println (Ljava/lang/String;)V )
@@ -6845,6 +6866,16 @@ sub get_OSgroup()
     }
 }
 
+sub get_ARG_MAX()
+{
+    if($OSgroup eq "windows") {
+        return 8191;
+    }
+    else { # Linux
+        return 2097152;
+    }
+}
+
 sub dump_sorting($)
 {
     my $Hash = $_[0];
@@ -7139,7 +7170,7 @@ sub scenario()
     }
     if(defined $ShowVersion)
     {
-        printMsg("INFO", "Java API Compliance Checker (Java ACC) $TOOL_VERSION\nCopyright (C) 2012 ROSA Lab\nLicense: LGPL or GPL <http://www.gnu.org/licenses/>\nThis program is free software: you can redistribute it and/or modify it.\n\nWritten by Andrey Ponomarenko.");
+        printMsg("INFO", "Java API Compliance Checker (Java ACC) $TOOL_VERSION\nCopyright (C) 2013 ROSA Lab\nLicense: LGPL or GPL <http://www.gnu.org/licenses/>\nThis program is free software: you can redistribute it and/or modify it.\n\nWritten by Andrey Ponomarenko.");
         exit(0);
     }
     if(defined $DumpVersion)
