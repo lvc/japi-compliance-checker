@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 ###########################################################################
-# Java API Compliance Checker (Java ACC) 1.3.3
+# Java API Compliance Checker (Java ACC) 1.3.4
 # A tool for checking backward compatibility of a Java library API
 #
 # Copyright (C) 2011 Institute for System Programming, RAS
@@ -45,7 +45,7 @@ use Cwd qw(abs_path cwd);
 use Data::Dumper;
 use Config;
 
-my $TOOL_VERSION = "1.3.3";
+my $TOOL_VERSION = "1.3.4";
 my $API_DUMP_VERSION = "1.0";
 my $API_DUMP_MAJOR = majorVersion($API_DUMP_VERSION);
 
@@ -54,7 +54,7 @@ $GenerateDescriptor, $TestSystem, $DumpAPI, $ClassListPath, $ClientPath,
 $StrictCompat, $DumpVersion, $BinaryOnly, $TargetLibraryFullName, $CheckImpl,
 %TargetVersion, $SourceOnly, $ShortMode, $KeepInternal, $OutputReportPath,
 $BinaryReportPath, $SourceReportPath, $Browse, $Debug, $Quick, $SortDump,
-$OpenReport, $SkipDeprecated, $SkipClasses, $ShowAccess);
+$OpenReport, $SkipDeprecated, $SkipClasses, $ShowAccess, $AffectLimit);
 
 my $CmdName = get_filename($0);
 my $OSgroup = get_OSgroup();
@@ -156,6 +156,7 @@ GetOptions("h|help!" => \$Help,
   "quick!" => \$Quick,
   "sort!" => \$SortDump,
   "show-access!" => \$ShowAccess,
+  "limit-affected=s" => \$AffectLimit,
 # other options
   "test!" => \$TestSystem,
   "debug!" => \$Debug,
@@ -356,6 +357,10 @@ EXTRA OPTIONS:
       
   -show-access
       Show access level of non-public methods listed in the report.
+      
+  -limit-affected LIMIT
+      The maximum number of affected methods listed under the description
+      of the changed type in the report.
 
 OTHER OPTIONS:
   -test
@@ -3643,6 +3648,9 @@ sub get_Report_TypeProblems($$)
             }
         }
     }
+    
+    my @Methods = sort {lc($tr_name{$a}) cmp lc($tr_name{$b})} keys(%CompatProblems);
+    
     my $Problems_Number = 0;
     foreach my $ArchiveName (sort {lc($a) cmp lc($b)} keys(%TypeArchive))
     {
@@ -4071,7 +4079,7 @@ sub get_Report_TypeProblems($$)
                 $ProblemNum -= 1;
                 if($TypeProblemsReport)
                 {
-                    my $Affected = getAffectedMethods($TypeName, \%Kinds_Locations, $Level);
+                    my $Affected = getAffectedMethods($Level, $TypeName, \%Kinds_Locations, \@Methods);
                     $NAMESPACE_REPORT .= $ContentSpanStart."<span class='extension'>[+]</span> ".htmlSpecChars($TypeName)." ($ProblemNum)".$ContentSpanEnd."<br/>\n";
                     $NAMESPACE_REPORT .= $ContentDivStart."<table class='ptable'><tr>";
                     $NAMESPACE_REPORT .= "<th width='2%'></th><th width='47%'>Change</th><th>Effect</th>";
@@ -4109,27 +4117,57 @@ sub get_Report_TypeProblems($$)
     return $TYPE_PROBLEMS;
 }
 
-sub getAffectedMethods($$$)
+sub getAffectedMethods($$$$)
 {
-    my ($Target_TypeName, $Kinds_Locations, $Level) = @_;
+    my ($Level, $Target_TypeName, $Kinds_Locations, $Methods) = @_;
     my ($Affected, %INumber) = ();
-    my $LIMIT = $ShortMode?10:1000;
-    foreach my $Method (sort {lc($tr_name{$a}) cmp lc($tr_name{$b})} keys(%CompatProblems))
+    
+    my $LIMIT = 1000;
+    
+    if(defined $AffectLimit)
     {
-        last if(keys(%INumber)>$LIMIT);
-        my $Signature = $MethodInfo{1}{$Method}{"Signature"};
-        foreach my $Kind (keys(%{$CompatProblems{$Method}}))
+        $LIMIT = $AffectLimit;
+    }
+    elsif(defined $ShortMode)
+    {
+        $AffectLimit = 10;
+        $LIMIT = $AffectLimit;
+    }
+    else
+    {
+        if($#{$Methods}>=1999)
+        { # reduce size of the report
+            $AffectLimit = 10;
+            
+            printMsg("WARNING", "reducing limit of affected symbols shown in the report to $AffectLimit");
+            $LIMIT = $AffectLimit;
+        }
+    }
+    
+    LOOP: foreach my $Method (@{$Methods})
+    {
+        foreach my $Kind (keys(%{$Kinds_Locations}))
         {
-            foreach my $Location (keys(%{$CompatProblems{$Method}{$Kind}}))
+            if(not defined $CompatProblems{$Method}
+            or not defined $CompatProblems{$Method}{$Kind}) {
+                next;
+            }
+            
+            foreach my $Location (keys(%{$Kinds_Locations->{$Kind}}))
             {
-                next if(not $Kinds_Locations->{$Kind}{$Location});
+                if(keys(%INumber)>$LIMIT) {
+                    last LOOP;
+                }
+                
                 next if(defined $INumber{$Method});
                 my $Type_Name = $CompatProblems{$Method}{$Kind}{$Location}{"Type_Name"};
                 next if($Type_Name ne $Target_TypeName);
-                $INumber{$Method}=1;
+                
+                $INumber{$Method} = 1;
+                
                 my $Param_Pos = $CompatProblems{$Method}{$Kind}{$Location}{"Parameter_Position"};
                 my $Description = getAffectDescription($Method, $Kind, $Location, $Level);
-                $Affected .=  "<span class='nblack'>".highLight_Signature_PPos_Italic($Signature, $Param_Pos, 1, 0)."</span><br/>"."<div class='affect'>".$Description."</div>\n";
+                $Affected .=  "<span class='nblack'>".highLight_Signature_PPos_Italic($MethodInfo{1}{$Method}{"Signature"}, $Param_Pos, 1, 0)."</span><br/>"."<div class='affect'>".$Description."</div>\n";
             }
         }
     }
@@ -6871,8 +6909,10 @@ sub get_ARG_MAX()
     if($OSgroup eq "windows") {
         return 8191;
     }
-    else { # Linux
-        return 2097152;
+    else
+    { # Linux
+      # TODO: set max possible value
+        return 32767;
     }
 }
 
