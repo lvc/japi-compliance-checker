@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 ###########################################################################
-# Java API Compliance Checker (Java ACC) 1.3.4
+# Java API Compliance Checker (Java ACC) 1.3.5
 # A tool for checking backward compatibility of a Java library API
 #
 # Copyright (C) 2011 Institute for System Programming, RAS
@@ -45,7 +45,7 @@ use Cwd qw(abs_path cwd);
 use Data::Dumper;
 use Config;
 
-my $TOOL_VERSION = "1.3.4";
+my $TOOL_VERSION = "1.3.5";
 my $API_DUMP_VERSION = "1.0";
 my $API_DUMP_MAJOR = majorVersion($API_DUMP_VERSION);
 
@@ -1774,9 +1774,6 @@ sub mergeTypes($$)
                     {
                         $SubProblems{$Sub_SubProblemType}{$NewLocation}{$Attr} = $Sub_SubProblems{$Sub_SubProblemType}{$Sub_SubLocation}{$Attr};
                     }
-                    if($Sub_SubLocation!~/\./) {
-                        $SubProblems{$Sub_SubProblemType}{$NewLocation}{"Start_Type_Name"} = $FieldType1{"Name"};
-                    }
                 }
             }
         }
@@ -2250,7 +2247,7 @@ sub mergeMethods()
             and $MethodInfo{2}{$Method}{"Abstract"})
             {
                 %{$CompatProblems{$Method}{"Method_Became_Abstract"}{""}} = ();
-                %{$CompatProblems{$Method}{"Class_Method_Became_Abstract"}{get_SFormat($Method)}} = (
+                %{$CompatProblems{$Method}{"Class_Method_Became_Abstract"}{"this.".get_SFormat($Method)}} = (
                     "Type_Name"=>$Class1{"Name"},
                     "Target"=>$Method  );
             }
@@ -2258,7 +2255,7 @@ sub mergeMethods()
             and not $MethodInfo{2}{$Method}{"Abstract"})
             {
                 %{$CompatProblems{$Method}{"Method_Became_NonAbstract"}{""}} = ();
-                %{$CompatProblems{$Method}{"Class_Method_Became_NonAbstract"}{get_SFormat($Method)}} = (
+                %{$CompatProblems{$Method}{"Class_Method_Became_NonAbstract"}{"this.".get_SFormat($Method)}} = (
                     "Type_Name"=>$Class1{"Name"},
                     "Target"=>$Method  );
             }
@@ -2277,7 +2274,7 @@ sub mergeMethods()
                     if(not $MethodInfo{1}{$Method}{"Abstract"}
                     and not $MethodInfo{2}{$Method}{"Abstract"})
                     {
-                        %{$CompatProblems{$Method}{"Removed_Unchecked_Exception"}{get_SFormat($Exception)}} = (
+                        %{$CompatProblems{$Method}{"Removed_Unchecked_Exception"}{"this.".get_SFormat($Exception)}} = (
                             "Type_Name"=>$Class1{"Name"},
                             "Target"=>$Exception  );
                     }
@@ -2287,13 +2284,13 @@ sub mergeMethods()
                     if($MethodInfo{1}{$Method}{"Abstract"}
                     and $MethodInfo{2}{$Method}{"Abstract"})
                     {
-                        %{$CompatProblems{$Method}{"Abstract_Method_Removed_Checked_Exception"}{get_SFormat($Exception)}} = (
+                        %{$CompatProblems{$Method}{"Abstract_Method_Removed_Checked_Exception"}{"this.".get_SFormat($Exception)}} = (
                             "Type_Name"=>$Class1{"Name"},
                             "Target"=>$Exception  );
                     }
                     else
                     {
-                        %{$CompatProblems{$Method}{"NonAbstract_Method_Removed_Checked_Exception"}{get_SFormat($Exception)}} = (
+                        %{$CompatProblems{$Method}{"NonAbstract_Method_Removed_Checked_Exception"}{"this.".get_SFormat($Exception)}} = (
                             "Type_Name"=>$Class1{"Name"},
                             "Target"=>$Exception  );
                     }
@@ -2312,7 +2309,7 @@ sub mergeMethods()
                     if(not $MethodInfo{1}{$Method}{"Abstract"}
                     and not $MethodInfo{2}{$Method}{"Abstract"})
                     {
-                        %{$CompatProblems{$Method}{"Added_Unchecked_Exception"}{get_SFormat($Exception)}} = (
+                        %{$CompatProblems{$Method}{"Added_Unchecked_Exception"}{"this.".get_SFormat($Exception)}} = (
                             "Type_Name"=>$Class1{"Name"},
                             "Target"=>$Exception  );
                     }
@@ -2322,13 +2319,13 @@ sub mergeMethods()
                     if($MethodInfo{1}{$Method}{"Abstract"}
                     and $MethodInfo{2}{$Method}{"Abstract"})
                     {
-                        %{$CompatProblems{$Method}{"Abstract_Method_Added_Checked_Exception"}{get_SFormat($Exception)}} = (
+                        %{$CompatProblems{$Method}{"Abstract_Method_Added_Checked_Exception"}{"this.".get_SFormat($Exception)}} = (
                             "Type_Name"=>$Class1{"Name"},
                             "Target"=>$Exception  );
                     }
                     else
                     {
-                        %{$CompatProblems{$Method}{"NonAbstract_Method_Added_Checked_Exception"}{get_SFormat($Exception)}} = (
+                        %{$CompatProblems{$Method}{"NonAbstract_Method_Added_Checked_Exception"}{"this.".get_SFormat($Exception)}} = (
                             "Type_Name"=>$Class1{"Name"},
                             "Target"=>$Exception  );
                     }
@@ -2336,7 +2333,7 @@ sub mergeMethods()
             }
         }
         foreach my $ParamPos (sort {int($a) <=> int($b)} keys(%{$MethodInfo{1}{$Method}{"Param"}}))
-        {# checking parameters
+        { # checking parameters
             mergeParameters($Method, $ParamPos, $ParamPos);
         }
         # check object type
@@ -2352,9 +2349,6 @@ sub mergeMethods()
                 {
                     my $NewLocation = ($SubLocation)?"this.".$SubLocation:"this";
                     @{$CompatProblems{$Method}{$SubProblemType}{$NewLocation}}{keys(%{$SubProblems{$SubProblemType}{$SubLocation}})} = values %{$SubProblems{$SubProblemType}{$SubLocation}};
-                    if($SubLocation!~/\./) {
-                        $CompatProblems{$Method}{$SubProblemType}{$NewLocation}{"Start_Type_Name"} = get_TypeName($ObjectType1_Id, 1);
-                    }
                 }
             }
         }
@@ -2369,11 +2363,8 @@ sub mergeMethods()
             {
                 foreach my $SubLocation (keys(%{$SubProblems{$SubProblemType}}))
                 {
-                    my $NewLocation = ($SubLocation)?"RetVal.".$SubLocation:"RetVal";
+                    my $NewLocation = ($SubLocation)?"retval.".$SubLocation:"retval";
                     @{$CompatProblems{$Method}{$SubProblemType}{$NewLocation}}{keys(%{$SubProblems{$SubProblemType}{$SubLocation}})} = values %{$SubProblems{$SubProblemType}{$SubLocation}};
-                    if($SubLocation!~/\./) {
-                        $CompatProblems{$Method}{$SubProblemType}{$NewLocation}{"Start_Type_Name"} = get_TypeName($ReturnType1_Id, 1);
-                    }
                 }
             }
         }
@@ -2403,9 +2394,6 @@ sub mergeParameters($$$)
                 "Parameter_Position"=>$ParamPos1,
                 "Parameter_Name"=>$Parameter_Name);
             @{$CompatProblems{$Method}{$SubProblemType}{$NewLocation}}{keys(%{$SubProblems{$SubProblemType}{$SubLocation}})} = values %{$SubProblems{$SubProblemType}{$SubLocation}};
-            if($SubLocation!~/\./) {
-                $CompatProblems{$Method}{$SubProblemType}{$NewLocation}{"Start_Type_Name"} = get_TypeName($ParamType1_Id, 1);
-            }
         }
     }
 }
@@ -3622,6 +3610,7 @@ sub get_Report_TypeProblems($$)
 {
     my ($TargetSeverity, $Level) = @_;
     my ($TYPE_PROBLEMS, %TypeArchive, %TypeChanges) = ();
+    
     foreach my $Method (sort keys(%CompatProblems))
     {
         foreach my $Kind (sort keys(%{$CompatProblems{$Method}}))
@@ -4159,6 +4148,10 @@ sub getAffectedMethods($$$$)
                     last LOOP;
                 }
                 
+                if(not defined $CompatProblems{$Method}{$Kind}{$Location}) {
+                    next;
+                }
+                
                 next if(defined $INumber{$Method});
                 my $Type_Name = $CompatProblems{$Method}{$Kind}{$Location}{"Type_Name"};
                 next if($Type_Name ne $Target_TypeName);
@@ -4166,7 +4159,7 @@ sub getAffectedMethods($$$$)
                 $INumber{$Method} = 1;
                 
                 my $Param_Pos = $CompatProblems{$Method}{$Kind}{$Location}{"Parameter_Position"};
-                my $Description = getAffectDescription($Method, $Kind, $Location, $Level);
+                my $Description = getAffectDesc($Method, $Kind, $Location, $Level);
                 $Affected .=  "<span class='nblack'>".highLight_Signature_PPos_Italic($MethodInfo{1}{$Method}{"Signature"}, $Param_Pos, 1, 0)."</span><br/>"."<div class='affect'>".$Description."</div>\n";
             }
         }
@@ -4183,7 +4176,7 @@ sub getAffectedMethods($$$$)
     return ($Affected);
 }
 
-sub getAffectDescription($$$$)
+sub getAffectDesc($$$$)
 {
     my ($Method, $Kind, $Location, $Level) = @_;
     my %Affect = %{$CompatProblems{$Method}{$Kind}{$Location}};
@@ -4192,41 +4185,55 @@ sub getAffectDescription($$$$)
     my $New_Value = $Affect{"New_Value"};
     my $Type_Name = $Affect{"Type_Name"};
     my $Parameter_Name = $Affect{"Parameter_Name"};
-    my $Start_Type_Name = $Affect{"Start_Type_Name"};
     my $Parameter_Position_Str = showPos($Affect{"Parameter_Position"});
     my @Sentence_Parts = ();
-    my $Location_To_Type = $Location;
-    $Location_To_Type=~s/\.[^.]+?\Z//;
+    
+    my $Location_I = $Location;
+    $Location=~s/\.[^.]+?\Z//;
+    
     my %TypeAttr = get_Type($MethodInfo{1}{$Method}{"Class"}, 1);
     my $Type_Type = $TypeAttr{"Type"};
     my $ABSTRACT_M = $MethodInfo{1}{$Method}{"Abstract"}?" abstract":"";
     my $ABSTRACT_C = $TypeAttr{"Abstract"}?" abstract":"";
     my $METHOD_TYPE = $MethodInfo{1}{$Method}{"Constructor"}?"constructor":"method";
+    
     if($Kind eq "Class_Overridden_Method" or $Kind eq "Class_Method_Moved_Up_Hierarchy") {
         return "Method '".highLight_Signature($New_Value)."' will be called instead of this method in a client program.";
     }
     elsif($TypeProblems_Kind{$Level}{$Kind})
     {
-        if($Location_To_Type eq "this") {
+        my %MInfo = %{$MethodInfo{1}{$Method}};
+        
+        if($Location eq "this") {
             return "This$ABSTRACT_M $METHOD_TYPE is from \'".htmlSpecChars($Type_Name)."\'$ABSTRACT_C $Type_Type.";
         }
-        if($Location_To_Type=~/RetVal/)
+        
+        my $TypeID = undef;
+        
+        if($Location=~/retval/)
         { # return value
-            if($Location_To_Type=~/\./) {
-                push(@Sentence_Parts, "Field \'".htmlSpecChars($Location_To_Type)."\' in return value");
+            if($Location=~/\./) {
+                push(@Sentence_Parts, "Field \'".htmlSpecChars($Location)."\' in return value");
             }
             else {
                 push(@Sentence_Parts, "Return value");
             }
+            
+            $TypeID = $MInfo{"Return"};
         }
-        elsif($Location_To_Type=~/this/)
+        elsif($Location=~/this/)
         { # "this" reference
-            push(@Sentence_Parts, "Field \'".htmlSpecChars($Location_To_Type)."\' in the object");
+            push(@Sentence_Parts, "Field \'".htmlSpecChars($Location)."\' in the object");
+            
+            $TypeID = $MInfo{"Class"};
         }
         else
         { # parameters
-            if($Location_To_Type=~/\./) {
-                push(@Sentence_Parts, "Field \'".htmlSpecChars($Location_To_Type)."\' in $Parameter_Position_Str parameter");
+            my $PName = getParamName($Location);
+            my $PPos = getParamPos($PName, $Method, 1);
+            
+            if($Location=~/\./) {
+                push(@Sentence_Parts, "Field \'".htmlSpecChars($Location)."\' in $Parameter_Position_Str parameter");
             }
             else {
                 push(@Sentence_Parts, "$Parameter_Position_Str parameter");
@@ -4234,9 +4241,20 @@ sub getAffectDescription($$$$)
             if($Parameter_Name) {
                 push(@Sentence_Parts, "\'$Parameter_Name\'");
             }
+            
+            $TypeID = $MInfo{"Param"}{$PPos}{"Type"};
         }
         push(@Sentence_Parts, " of this$ABSTRACT_M method");
-        if($Start_Type_Name eq $Type_Name) {
+        
+        my $Location_T = $Location;
+        $Location_T=~s/\A\w+(\.|\Z)//; # location in type
+        
+        my $TypeID_Problem = $TypeID;
+        if($Location_T) {
+            $TypeID_Problem = getFieldType($Location_T, $TypeID, 1);
+        }
+        
+        if($TypeInfo{1}{$TypeID_Problem}{"Name"} eq $Type_Name) {
             push(@Sentence_Parts, "has type \'".htmlSpecChars($Type_Name)."\'.");
         }
         else {
@@ -4244,6 +4262,56 @@ sub getAffectDescription($$$$)
         }
     }
     return join(" ", @Sentence_Parts);
+}
+
+sub getParamPos($$$)
+{
+    my ($Name, $Method, $LibVersion) = @_;
+    
+    if(defined $MethodInfo{$LibVersion}{$Method}
+    and defined $MethodInfo{$LibVersion}{$Method}{"Param"})
+    {
+        my $Info = $MethodInfo{$LibVersion}{$Method};
+        foreach (keys(%{$Info->{"Param"}}))
+        {
+            if($Info->{"Param"}{$_}{"Name"} eq $Name)
+            {
+                return $_;
+            }
+        }
+    }
+    
+    return undef;
+}
+
+sub getParamName($)
+{
+    my $Loc = $_[0];
+    $Loc=~s/\..*//g;
+    return $Loc;
+}
+
+sub getFieldType($$$)
+{
+    my ($Location, $TypeId, $LibVersion) = @_;
+    
+    my @Fields = split(/\./, $Location);
+    
+    foreach my $Name (@Fields)
+    {
+        my %Info = get_BaseType($TypeId, $LibVersion);
+        
+        foreach my $N (keys(%{$Info{"Fields"}}))
+        {
+            if($N eq $Name)
+            {
+                $TypeId = $Info{"Fields"}{$N}{"Type"};
+                last;
+            }
+        }
+    }
+    
+    return $TypeId;
 }
 
 sub writeReport($$)
@@ -6465,7 +6533,7 @@ sub detectAdded()
                 if(defined $MethodInfo{1}{$Overridden}
                 and get_TypeType($ClassId, 2) eq "class" and $TName_Tid{1}{$Class{"Name"}})
                 { # class should exist in previous version
-                    %{$CompatProblems{$Overridden}{"Class_Overridden_Method"}{get_SFormat($Method)}}=(
+                    %{$CompatProblems{$Overridden}{"Class_Overridden_Method"}{"this.".get_SFormat($Method)}}=(
                         "Type_Name"=>$Class{"Name"},
                         "Target"=>$MethodInfo{2}{$Method}{"Signature"},
                         "Old_Value"=>$MethodInfo{2}{$Overridden}{"Signature"},
@@ -6516,7 +6584,7 @@ sub detectRemoved()
                 if(get_TypeType($ClassId, 1) eq "class"
                 and not $MethodInfo{1}{$Method}{"Abstract"} and $TName_Tid{2}{$Class{"Name"}})
                 {# class should exist in newer version
-                    %{$CompatProblems{$Method}{"Class_Method_Moved_Up_Hierarchy"}{get_SFormat($MovedUp)}}=(
+                    %{$CompatProblems{$Method}{"Class_Method_Moved_Up_Hierarchy"}{"this.".get_SFormat($MovedUp)}}=(
                         "Type_Name"=>$Class{"Name"},
                         "Target"=>$MethodInfo{2}{$MovedUp}{"Signature"},
                         "Old_Value"=>$MethodInfo{1}{$Method}{"Signature"},
@@ -6907,11 +6975,11 @@ sub get_OSgroup()
 sub get_ARG_MAX()
 {
     if($OSgroup eq "windows") {
-        return 8191;
+        return 1990; # 8191, 2047
     }
     else
     { # Linux
-      # TODO: set max possible value
+      # TODO: set max possible value (~131000)
         return 32767;
     }
 }
@@ -7387,6 +7455,9 @@ sub scenario()
             exitStatus("Access_Error", "can't access \'$Part\'");
         }
     }
+    
+    detect_default_paths();
+    
     checkVersionNum(1, $Descriptor{1}{"Path"});
     checkVersionNum(2, $Descriptor{2}{"Path"});
     foreach my $Part (split(/\s*,\s*/, $Descriptor{1}{"Path"})) {
@@ -7403,8 +7474,6 @@ sub scenario()
     }
     initLogging(1);
     initLogging(2);
-    
-    detect_default_paths();
     
     if($Descriptor{1}{"Archives"}
     and not $Descriptor{1}{"Dump"}) {
