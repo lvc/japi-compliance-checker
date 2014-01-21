@@ -4,7 +4,7 @@
 # Install/remove the tool for GNU/Linux, FreeBSD and Mac OS X
 #
 # Copyright (C) 2011 Russian Linux Verification Center
-# Copyright (C) 2011-2013 ROSA Lab
+# Copyright (C) 2011-2014 ROSA Laboratory
 #
 # Written by Andrey Ponomarenko
 #

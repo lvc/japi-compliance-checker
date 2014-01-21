@@ -1,11 +1,11 @@
 #!/usr/bin/perl
 ###########################################################################
-# Java API Compliance Checker (Java ACC) 1.3.5
+# Java API Compliance Checker (Java ACC) 1.3.6
 # A tool for checking backward compatibility of a Java library API
 #
 # Copyright (C) 2011 Institute for System Programming, RAS
 # Copyright (C) 2011 Russian Linux Verification Center
-# Copyright (C) 2011-2013 ROSA Lab
+# Copyright (C) 2011-2014 ROSA Lab
 #
 # Written by Andrey Ponomarenko
 #
@@ -45,7 +45,7 @@ use Cwd qw(abs_path cwd);
 use Data::Dumper;
 use Config;
 
-my $TOOL_VERSION = "1.3.5";
+my $TOOL_VERSION = "1.3.6";
 my $API_DUMP_VERSION = "1.0";
 my $API_DUMP_MAJOR = majorVersion($API_DUMP_VERSION);
 
@@ -94,7 +94,7 @@ my %HomePage = (
 
 my $ShortUsage = "Java API Compliance Checker (Java ACC) $TOOL_VERSION
 A tool for checking backward compatibility of a Java library API
-Copyright (C) 2013 ROSA Lab
+Copyright (C) 2014 ROSA Lab
 License: GNU LGPL or GNU GPL
 
 Usage: $CmdName [options]
@@ -634,6 +634,7 @@ my %ClassList_User;
 my %SkipClass_User;
 my %UsedMethods_Client;
 my %UsedFields_Client;
+my %UsedClasses_Client;
 my %LibClasses;
 my %LibArchives;
 my %Class_Methods;
@@ -1971,9 +1972,12 @@ sub methodFilter($$)
     { # user defined classes
         return 0;
     }
-    if($ClientPath and not $UsedMethods_Client{$Method})
+    if($ClientPath)
     { # user defined application
-        return 0;
+        if(not $UsedMethods_Client{$Method}
+        and not $UsedClasses_Client{$Class{"Name"}}) {
+            return 0;
+        }
     }
     if(skip_package($Package, $LibVersion))
     { # internal packages
@@ -5965,11 +5969,16 @@ sub testSystem()
 }
 
 sub readArchive($$)
-{
+{ # 1, 2 - library, 0 - client
     my ($LibVersion, $Path) = @_;
     return if(not $Path or not -e $Path);
-    my $ArchiveName = get_filename($Path);
-    $LibArchives{$LibVersion}{$ArchiveName} = 1;
+    
+    if($LibVersion)
+    {
+        my $ArchiveName = get_filename($Path);
+        $LibArchives{$LibVersion}{$ArchiveName} = 1;
+    }
+    
     $Path = get_abs_path($Path);
     my $JarCmd = get_CmdPath("jar");
     if(not $JarCmd) {
@@ -5990,32 +5999,50 @@ sub readArchive($$)
         $ClassPath=~s/\.class\Z//g;
         my $ClassName = get_filename($ClassPath);
         next if($ClassName=~/\$\d/);
+        $ClassPath = cut_path_prefix($ClassPath, $TMP_DIR); # javap decompiler accepts relative paths only
+        
         my $RelPath = cut_path_prefix(get_dirname($ClassPath), $ExtractPath);
-        $ClassPath = cut_path_prefix($ClassPath, $TMP_DIR);
         if($RelPath=~/\./)
         { # jaxb-osgi.jar/1.0/org/apache
             next;
         }
+        
         my $Package = get_PFormat($RelPath);
-        if(skip_package($Package, $LibVersion))
-        { # internal packages
-            next;
+        if($LibVersion)
+        {
+            if(skip_package($Package, $LibVersion))
+            { # internal packages
+                next;
+            }
         }
-        $ClassName=~s/\$/./g;# real name for GlyphView$GlyphPainter is GlyphView.GlyphPainter
-        $LibClasses{$LibVersion}{$ClassName} = $Package;
-        # Javap decompiler accepts relative paths only
+        
+        $ClassName=~s/\$/./g; # real name for GlyphView$GlyphPainter is GlyphView.GlyphPainter
         push(@Classes, $ClassPath);
+        
+        if($LibVersion) {
+            $LibClasses{$LibVersion}{$ClassName} = $Package;
+        }
     }
     
     if($#Classes!=-1)
     {
-        foreach my $PartRef (divideArray(\@Classes)) {
-            readClasses($PartRef, $LibVersion, get_filename($Path));
+        foreach my $PartRef (divideArray(\@Classes))
+        {
+            if($LibVersion) {
+                readClasses($PartRef, $LibVersion, get_filename($Path));
+            }
+            else {
+                readClasses_Usage($PartRef);
+            }
         }
     }
-    foreach my $SubArchive (cmd_find($ExtractPath,"","*\.jar",""))
-    { # recursive step
-        readArchive($LibVersion, $SubArchive);
+    
+    if($LibVersion)
+    {
+        foreach my $SubArchive (cmd_find($ExtractPath,"","*\.jar",""))
+        { # recursive step
+            readArchive($LibVersion, $SubArchive);
+        }
     }
 }
 
@@ -6064,60 +6091,6 @@ sub divideArray($)
     return @Res;
 }
 
-sub readUsage_Client($)
-{
-    my $Path = $_[0];
-    return if(not $Path or not -e $Path);
-    my $JarCmd = get_CmdPath("jar");
-    if(not $JarCmd) {
-        exitStatus("Not_Found", "can't find \"jar\" command");
-    }
-    $Path = get_abs_path($Path);
-    my $ExtractPath = "$TMP_DIR/extracted";
-    rmtree($ExtractPath);
-    mkpath($ExtractPath);
-    chdir($ExtractPath);
-    system($JarCmd." -xf \"$Path\"");
-    if($?) {
-        exitStatus("Error", "can't extract \'$Path\'");
-    }
-    chdir($ORIG_DIR);
-    my @Classes = ();
-    foreach my $ClassPath (cmd_find($ExtractPath,"","*\.class",""))
-    {
-        next if(get_filename($ClassPath)=~/\$/);
-        $ClassPath=~s/\.class\Z//g;
-        $ClassPath = cut_path_prefix($ClassPath, $ORIG_DIR);
-        push(@Classes, $ClassPath);
-    }
-    readUsage_Classes(\@Classes);
-}
-
-sub readUsage_Classes($)
-{
-    my $Paths = $_[0];
-    return () if(not $Paths);
-    my $JavapCmd = get_CmdPath("javap");
-    if(not $JavapCmd) {
-        exitStatus("Not_Found", "can't find \"javap\" command");
-    }
-    my $Input = join(" ", @{$Paths});
-    open(CONTENT, "$JavapCmd -c -private $Input |");
-    while(<CONTENT>)
-    {
-        if(/\/\/(Method|InterfaceMethod)\s+(.+)\Z/) {
-            $UsedMethods_Client{$2} = 1;
-        }
-        elsif(/\/\/Field\s+(.+)\Z/) {
-            my $FieldName = $1;
-            if(/\s+(putfield|getfield|getstatic|putstatic)\s+/) {
-                $UsedFields_Client{$FieldName} = $1;
-            }
-        }
-    }
-    close(CONTENT);
-}
-
 sub registerType($$)
 {
     my ($TName, $LibVersion) = @_;
@@ -6145,10 +6118,73 @@ sub registerType($$)
     return $Tid;
 }
 
+sub readClasses_Usage($)
+{
+    my $Paths = $_[0];
+    return () if(not $Paths);
+    
+    my $JavapCmd = get_CmdPath("javap");
+    if(not $JavapCmd) {
+        exitStatus("Not_Found", "can't find \"javap\" command");
+    }
+    my $Input = join(" ", @{$Paths});
+    if($OSgroup ne "windows")
+    { # on unix ensure that the system does not try and interpret the $, by escaping it
+        $Input=~s/\$/\\\$/g;
+    }
+    chdir($TMP_DIR);
+    open(CONTENT, "$JavapCmd -c -private $Input |");
+    while(<CONTENT>)
+    {
+        if(/\/\/(Method|InterfaceMethod)\s+(.+)\Z/) {
+            $UsedMethods_Client{$2} = 1;
+        }
+        elsif(/\/\/Field\s+(.+)\Z/)
+        {
+            my $FieldName = $1;
+            if(/\s+(putfield|getfield|getstatic|putstatic)\s+/) {
+                $UsedFields_Client{$FieldName} = $1;
+            }
+        }
+        elsif(/ ([^\s]+) [^:]+\(([^()]+)\)/)
+        {
+            my ($Ret, $Params) = ($1, $2);
+            
+            $Ret=~s/\[\]//g; # quals
+            $UsedClasses_Client{$Ret} = 1;
+            
+            foreach my $Param (split(/\s*,\s*/, $Params))
+            {
+                $Param=~s/\[\]//g; # quals
+                $UsedClasses_Client{$Param} = 1;
+            }
+        }
+        elsif(/ class /)
+        {
+            if(/extends ([^\s{]+)/)
+            {
+                foreach my $Class (split(/\s*,\s*/, $1)) {
+                    $UsedClasses_Client{$Class} = 1;
+                }
+            }
+            
+            if(/implements ([^\s{]+)/)
+            {
+                foreach my $Interface (split(/\s*,\s*/, $1)) {
+                    $UsedClasses_Client{$Interface} = 1;
+                }
+            }
+        }
+    }
+    close(CONTENT);
+    chdir($ORIG_DIR);
+}
+
 sub readClasses($$$)
 {
     my ($Paths, $LibVersion, $ArchiveName) = @_;
     return if(not $Paths or not $LibVersion or not $ArchiveName);
+    
     my $JavapCmd = get_CmdPath("javap");
     if(not $JavapCmd) {
         exitStatus("Not_Found", "can't find \"javap\" command");
@@ -7278,7 +7314,7 @@ sub scenario()
     }
     if(defined $ShowVersion)
     {
-        printMsg("INFO", "Java API Compliance Checker (Java ACC) $TOOL_VERSION\nCopyright (C) 2013 ROSA Lab\nLicense: LGPL or GPL <http://www.gnu.org/licenses/>\nThis program is free software: you can redistribute it and/or modify it.\n\nWritten by Andrey Ponomarenko.");
+        printMsg("INFO", "Java API Compliance Checker (Java ACC) $TOOL_VERSION\nCopyright (C) 2014 ROSA Lab\nLicense: LGPL or GPL <http://www.gnu.org/licenses/>\nThis program is free software: you can redistribute it and/or modify it.\n\nWritten by Andrey Ponomarenko.");
         exit(0);
     }
     if(defined $DumpVersion)
@@ -7380,8 +7416,12 @@ sub scenario()
     }
     if($ClientPath)
     {
+        if($ClientPath=~/\.class\Z/) {
+            exitStatus("Error", "input file is not a java archive");
+        }
+        
         if(-f $ClientPath) {
-            readUsage_Client($ClientPath)
+            readArchive(0, $ClientPath)
         }
         else {
             exitStatus("Access_Error", "can't access file \'$ClientPath\'");
