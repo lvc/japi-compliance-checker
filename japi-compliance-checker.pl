@@ -1,11 +1,11 @@
 #!/usr/bin/perl
 ###########################################################################
-# Java API Compliance Checker (Java ACC) 1.3.7
+# Java API Compliance Checker (Java ACC) 1.3.8
 # A tool for checking backward compatibility of a Java library API
 #
 # Copyright (C) 2011 Institute for System Programming, RAS
 # Copyright (C) 2011 Russian Linux Verification Center
-# Copyright (C) 2011-2014 ROSA Lab
+# Copyright (C) 2011-2014 ROSA Laboratory
 #
 # Written by Andrey Ponomarenko
 #
@@ -45,7 +45,7 @@ use Cwd qw(abs_path cwd);
 use Data::Dumper;
 use Config;
 
-my $TOOL_VERSION = "1.3.7";
+my $TOOL_VERSION = "1.3.8";
 my $API_DUMP_VERSION = "1.0";
 my $API_DUMP_MAJOR = majorVersion($API_DUMP_VERSION);
 
@@ -55,7 +55,7 @@ $StrictCompat, $DumpVersion, $BinaryOnly, $TargetLibraryFullName, $CheckImpl,
 %TargetVersion, $SourceOnly, $ShortMode, $KeepInternal, $OutputReportPath,
 $BinaryReportPath, $SourceReportPath, $Browse, $Debug, $Quick, $SortDump,
 $OpenReport, $SkipDeprecated, $SkipClasses, $ShowAccess, $AffectLimit,
-$JdkPath, $SkipInternal);
+$JdkPath, $SkipInternal, $HideTemplates, $HidePackages, $Minimal);
 
 my $CmdName = get_filename($0);
 my $OSgroup = get_OSgroup();
@@ -95,7 +95,7 @@ my %HomePage = (
 
 my $ShortUsage = "Java API Compliance Checker (Java ACC) $TOOL_VERSION
 A tool for checking backward compatibility of a Java library API
-Copyright (C) 2014 ROSA Lab
+Copyright (C) 2014 ROSA Laboratory
 License: GNU LGPL or GNU GPL
 
 Usage: $CmdName [options]
@@ -159,6 +159,9 @@ GetOptions("h|help!" => \$Help,
   "sort!" => \$SortDump,
   "show-access!" => \$ShowAccess,
   "limit-affected=s" => \$AffectLimit,
+  "hide-templates!" => \$HideTemplates,
+  "hide-packages!" => \$HidePackages,
+  "minimal!" => \$Minimal,
 # other options
   "test!" => \$TestSystem,
   "debug!" => \$Debug,
@@ -374,6 +377,16 @@ EXTRA OPTIONS:
       
   -show-access
       Show access level of non-public methods listed in the report.
+      
+  -hide-templates
+      Hide template parameters in the report.
+  
+  -hide-packages
+      Hide package names in the report.
+  
+  -minimal
+      Show easy-to-read minimal report. Enables -hide-templates
+      and -hide-packages options.
       
   -limit-affected LIMIT
       The maximum number of affected methods listed under the description
@@ -2490,6 +2503,10 @@ sub get_Signature($$$)
     {
         my $Class = get_TypeName($MethodInfo{$LibVersion}{$Method}{"Class"}, $LibVersion);
         
+        if($HideTemplates) {
+            $Class=~s/<.*>//g;
+        }
+        
         if($Html) {
             $Class = htmlSpecChars($Class);
         }
@@ -2503,9 +2520,18 @@ sub get_Signature($$$)
         my $PTid = $MethodInfo{$LibVersion}{$Method}{"Param"}{$PPos}{"Type"};
         if(my $PTName = get_TypeName($PTid, $LibVersion))
         {
+            if($HideTemplates) {
+                $PTName=~s/<.*>//g;
+            }
+            
+            if($HidePackages) {
+                $PTName=~s/\A[a-z0-9\.]+\.//g;
+            }
+            
             if($Html) {
                 $PTName = htmlSpecChars($PTName);
             }
+            
             if($Full)
             {
                 my $PName = $MethodInfo{$LibVersion}{$Method}{"Param"}{$PPos}{"Name"};
@@ -2587,6 +2613,14 @@ sub get_Signature($$$)
         if(my $ReturnId = $MethodInfo{$LibVersion}{$Method}{"Return"})
         {
             my $RName = get_TypeName($ReturnId, $LibVersion);
+            
+            if($HideTemplates) {
+                $RName=~s/<.*>//g;
+            }
+            
+            if($HidePackages) {
+                $RName=~s/\A[a-z0-9\.]+\.//g;
+            }
             
             if($Html) {
                 $Signature .= "<span class='sym_p nowrap'> &#160;<b>:</b>&#160;&#160;".htmlSpecChars($RName)."</span>";
@@ -2827,6 +2861,9 @@ sub runChecker($$$)
     }
     if($Quick) {
         $Cmd .= " -quick";
+    }
+    if($Minimal) {
+        $Cmd .= " -minimal";
     }
     if(defined $SkipDeprecated) {
         $Cmd .= " -skip-deprecated";
@@ -6298,13 +6335,13 @@ sub readClasses($$$)
         { # <T extends java.lang.Object>
             if($LINE=~/<[A-Z] /)
             {
-                while($LINE=~/<([A-Z] .*?)>( |\Z)/)
+                while($LINE=~/<([A-Z\?] .*?)>( |\Z)/)
                 {
                     my $Str = $1;
                     my @Prms = ();
                     foreach my $P (separate_Params($Str))
                     {
-                        $P=~s/\A([A-Z]) .*\Z/$1/g;
+                        $P=~s/\A([A-Z\?]) .*\Z/$1/g;
                         push(@Prms, $P);
                     }
                     my $Str_N = join(", ", @Prms);
@@ -7426,6 +7463,12 @@ sub createArchive($$)
 
 sub scenario()
 {
+    if($Minimal)
+    {
+        $HideTemplates = 1;
+        $HidePackages = 1;
+    }
+    
     if($BinaryOnly and $SourceOnly)
     { # both --binary and --source
       # is the default mode
@@ -7444,13 +7487,14 @@ sub scenario()
         $DoubleReport = 0;
         $JoinReport = 0;
     }
-    if(defined $Help) {
+    if(defined $Help)
+    {
         HELP_MESSAGE();
         exit(0);
     }
     if(defined $ShowVersion)
     {
-        printMsg("INFO", "Java API Compliance Checker (Java ACC) $TOOL_VERSION\nCopyright (C) 2014 ROSA Lab\nLicense: LGPL or GPL <http://www.gnu.org/licenses/>\nThis program is free software: you can redistribute it and/or modify it.\n\nWritten by Andrey Ponomarenko.");
+        printMsg("INFO", "Java API Compliance Checker (Java ACC) $TOOL_VERSION\nCopyright (C) 2014 ROSA Laboratory\nLicense: LGPL or GPL <http://www.gnu.org/licenses/>\nThis program is free software: you can redistribute it and/or modify it.\n\nWritten by Andrey Ponomarenko.");
         exit(0);
     }
     if(defined $DumpVersion)
