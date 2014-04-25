@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 ###########################################################################
-# Java API Compliance Checker (Java ACC) 1.3.6
+# Java API Compliance Checker (Java ACC) 1.3.7
 # A tool for checking backward compatibility of a Java library API
 #
 # Copyright (C) 2011 Institute for System Programming, RAS
@@ -45,7 +45,7 @@ use Cwd qw(abs_path cwd);
 use Data::Dumper;
 use Config;
 
-my $TOOL_VERSION = "1.3.6";
+my $TOOL_VERSION = "1.3.7";
 my $API_DUMP_VERSION = "1.0";
 my $API_DUMP_MAJOR = majorVersion($API_DUMP_VERSION);
 
@@ -54,7 +54,8 @@ $GenerateDescriptor, $TestSystem, $DumpAPI, $ClassListPath, $ClientPath,
 $StrictCompat, $DumpVersion, $BinaryOnly, $TargetLibraryFullName, $CheckImpl,
 %TargetVersion, $SourceOnly, $ShortMode, $KeepInternal, $OutputReportPath,
 $BinaryReportPath, $SourceReportPath, $Browse, $Debug, $Quick, $SortDump,
-$OpenReport, $SkipDeprecated, $SkipClasses, $ShowAccess, $AffectLimit);
+$OpenReport, $SkipDeprecated, $SkipClasses, $ShowAccess, $AffectLimit,
+$JdkPath, $SkipInternal);
 
 my $CmdName = get_filename($0);
 my $OSgroup = get_OSgroup();
@@ -144,6 +145,7 @@ GetOptions("h|help!" => \$Help,
   "v2|version2=s" => \$TargetVersion{2},
   "s|strict!" => \$StrictCompat,
   "keep-internal!" => \$KeepInternal,
+  "skip-internal=s" => \$SkipInternal,
   "dump|dump-api=s" => \$DumpAPI,
   "classes-list=s" => \$ClassListPath,
   "skip-deprecated!" => \$SkipDeprecated,
@@ -162,7 +164,8 @@ GetOptions("h|help!" => \$Help,
   "debug!" => \$Debug,
   "l-full|lib-full=s" => \$TargetLibraryFullName,
   "b|browse=s" => \$Browse,
-  "open!" => \$OpenReport
+  "open!" => \$OpenReport,
+  "jdk-path=s" => \$JdkPath
 ) or ERR_MESSAGE();
 
 if(@ARGV)
@@ -306,6 +309,20 @@ EXTRA OPTIONS:
   -s|-strict
       Treat all API compatibility warnings as problems.
       
+  -keep-internal
+      Do not skip checking of these packages:
+        *impl*
+        *internal*
+        *examples*
+        *com.oracle*
+        *com.sun*
+        *COM.rsa*
+        *sun*
+        *sunw*
+        
+  -skip-internal PATTERN
+      Do not check internal packages matched by the pattern.
+      
   -dump|-dump-api PATH
       Dump library API to gzipped TXT format file. You can transfer it
       anywhere and pass instead of the descriptor. Also it may be used
@@ -384,6 +401,9 @@ OTHER OPTIONS:
 
   -open
       Open report(s) in the default browser.
+      
+  -jdk-path PATH
+      Path to the JDK install tree (e.g. /usr/lib/jvm/java-7-openjdk-amd64).
 
 REPORT:
     Compatibility report will be generated to:
@@ -621,6 +641,7 @@ my $ExtractCounter = 0;
 my %Cache;
 my $TOP_REF = "<a style='font-size:11px;' href='#Top'>to the top</a>";
 my %DEBUG_PATH;
+my $JAVA_VERSION;
 
 #Types
 my %TypeInfo;
@@ -657,6 +678,7 @@ my %RemovedMethod_Abstract;
 my %ChangedReturnFromVoid;
 my %SkipPackages;
 my %KeepPackages;
+my %SkippedPackage;
 
 #Report
 my %Type_MaxPriority;
@@ -711,6 +733,16 @@ sub search_Cmd($)
     return "" if(not $Name);
     if(defined $Cache{"search_Cmd"}{$Name}) {
         return $Cache{"search_Cmd"}{$Name};
+    }
+    if(defined $JdkPath)
+    {
+        if(-x $JdkPath."/".$Name) {
+            return ($Cache{"search_Cmd"}{$Name} = $JdkPath."/".$Name);
+        }
+        
+        if(-x $JdkPath."/bin/".$Name) {
+            return ($Cache{"search_Cmd"}{$Name} = $JdkPath."/bin/".$Name);
+        }
     }
     if(my $DefaultPath = get_CmdPath_Default($Name)) {
         return ($Cache{"search_Cmd"}{$Name} = $DefaultPath);
@@ -908,67 +940,6 @@ sub get_dirname($)
 
 sub separate_path($) {
     return (get_dirname($_[0]), get_filename($_[0]));
-}
-
-sub esc($)
-{
-    my $Str = $_[0];
-    $Str=~s/([()\[\]{}$ &'"`;,<>\+])/\\$1/g;
-    return $Str;
-}
-
-sub get_Signature($$$)
-{
-    my ($Method, $LibVersion, $Kind) = @_;
-    if(defined $Cache{"get_Signature"}{$LibVersion}{$Method}{$Kind}) {
-        return $Cache{"get_Signature"}{$LibVersion}{$Method}{$Kind};
-    }
-    my $Signature = $MethodInfo{$LibVersion}{$Method}{"ShortName"};
-    if($Kind eq "Full") {
-        $Signature = get_TypeName($MethodInfo{$LibVersion}{$Method}{"Class"}, $LibVersion).".".$Signature;
-    }
-    my @Params = ();
-    foreach my $PPos (sort {int($a)<=>int($b)}
-    keys(%{$MethodInfo{$LibVersion}{$Method}{"Param"}}))
-    {
-        my $PTid = $MethodInfo{$LibVersion}{$Method}{"Param"}{$PPos}{"Type"};
-        if(my $PTName = get_TypeName($PTid, $LibVersion))
-        {
-            if($Kind eq "Full")
-            {
-                my $PName = $MethodInfo{$LibVersion}{$Method}{"Param"}{$PPos}{"Name"};
-                push(@Params, $PTName." ".$PName);
-            }
-            else {
-                push(@Params, $PTName);
-            }
-        }
-    }
-    $Signature .= "(".join(", ", @Params).")";
-    if($Kind eq "Full")
-    {
-        if($MethodInfo{$LibVersion}{$Method}{"Static"}) {
-            $Signature .= " [static]";
-        }
-        elsif($MethodInfo{$LibVersion}{$Method}{"Abstract"}) {
-            $Signature .= " [abstract]";
-        }
-        if($ShowAccess)
-        {
-            if(my $Access = $MethodInfo{$LibVersion}{$Method}{"Access"})
-            {
-                if($Access ne "public") {
-                    $Signature .= " [".$Access."]";
-                }
-            }
-        }
-        if(my $ReturnId = $MethodInfo{$LibVersion}{$Method}{"Return"}) {
-            $Signature .= " :".get_TypeName($ReturnId, $LibVersion);
-        }
-        $Signature=~s/java\.lang\.//g;
-    }
-    $Cache{"get_Signature"}{$LibVersion}{$Method}{$Kind} = $Signature;
-    return $Cache{"get_Signature"}{$LibVersion}{$Method}{$Kind};
 }
 
 sub joinPath($$)
@@ -1429,7 +1400,7 @@ sub mergeTypes($$)
                 if(my @InvokedBy = keys(%{$MethodInvoked{2}{$AddedMethod}}))
                 {
                     my $MFirst = $InvokedBy[0];
-                    $Add_Effect = " Added abstract method is called in 2nd library version by the method ".black_name($MethodInfo{1}{$MFirst}{"Signature"})." and may not be implemented by old clients.";
+                    $Add_Effect = " Added abstract method is called in 2nd library version by the method ".black_Name($MFirst, 1)." and may not be implemented by old clients.";
                 }
                 %{$SubProblems{"Abstract_Class_Added_Abstract_Method"}{get_SFormat($AddedMethod)}} = (
                     "Type_Name"=>$Type1{"Name"},
@@ -1451,7 +1422,7 @@ sub mergeTypes($$)
             if(my @InvokedBy = keys(%{$MethodInvoked{2}{$AddedMethod}}))
             {
                 my $MFirst = $InvokedBy[0];
-                $Add_Effect = " Added abstract method is called in 2nd library version by the method ".black_name($MethodInfo{1}{$MFirst}{"Signature"})." and may not be implemented by old clients.";
+                $Add_Effect = " Added abstract method is called in 2nd library version by the method ".black_Name($MFirst, 1)." and may not be implemented by old clients.";
             }
             %{$SubProblems{"Interface_Added_Abstract_Method"}{get_SFormat($AddedMethod)}} = (
                 "Type_Name"=>$Type1{"Name"},
@@ -1500,7 +1471,7 @@ sub mergeTypes($$)
                         my $MSignature = unmangle($MFirst);
                         $MSignature=~s/\A.+\.(\w+\()/$1/g; # short name
                         my $InvokedBy = $ClassMethod_AddedInvoked{$Type1{"Name"}}{$MFirst};
-                        $Add_Effect = " Abstract method ".black_name($MSignature)." from the added abstract super-class is called by the method ".black_name($MethodInfo{2}{$InvokedBy}{"Signature"})." in 2nd library version and may not be implemented by old clients.";
+                        $Add_Effect = " Abstract method ".black_Name_Str(htmlSpecChars($MSignature))." from the added abstract super-class is called by the method ".black_Name($InvokedBy, 2)." in 2nd library version and may not be implemented by old clients.";
                     }
                     %{$SubProblems{"Abstract_Class_Added_Super_Abstract_Class"}{""}} = (
                         "Type_Name"=>$Type1{"Name"},
@@ -1551,7 +1522,7 @@ sub mergeTypes($$)
                         my $MSignature = unmangle($MFirst);
                         $MSignature=~s/\A.+\.(\w+\()/$1/g; # short name
                         my $InvokedBy = $ClassMethod_AddedInvoked{$Type1{"Name"}}{$MFirst};
-                        $Add_Effect = " Abstract method ".black_name($MSignature)." from the added super-interface is called by the method ".black_name($MethodInfo{2}{$InvokedBy}{"Signature"})." in 2nd library version and may not be implemented by old clients.";
+                        $Add_Effect = " Abstract method ".black_Name_Str(htmlSpecChars($MSignature))." from the added super-interface is called by the method ".black_Name($InvokedBy, 2)." in 2nd library version and may not be implemented by old clients.";
                     }
                     %{$SubProblems{"Interface_Added_Super_Interface"}{get_SFormat($SuperInterface)}} = (
                         "Type_Name"=>$Type1{"Name"},
@@ -1579,7 +1550,7 @@ sub mergeTypes($$)
                         my $MSignature = unmangle($MFirst);
                         $MSignature=~s/\A.+\.(\w+\()/$1/g; # short name
                         my $InvokedBy = $ClassMethod_AddedInvoked{$Type1{"Name"}}{$MFirst};
-                        $Add_Effect = " Abstract method ".black_name($MSignature)." from the added super-interface is called by the method ".black_name($MethodInfo{2}{$InvokedBy}{"Signature"})." in 2nd library version and may not be implemented by old clients.";
+                        $Add_Effect = " Abstract method ".black_Name_Str(htmlSpecChars($MSignature))." from the added super-interface is called by the method ".black_Name($InvokedBy, 2)." in 2nd library version and may not be implemented by old clients.";
                     }
                     %{$SubProblems{"Abstract_Class_Added_Super_Interface"}{get_SFormat($SuperInterface)}} = (
                         "Type_Name"=>$Type1{"Name"},
@@ -1891,12 +1862,6 @@ sub unmangle($)
     }
 }
 
-sub black_name($)
-{
-    my $Name = $_[0];
-    return "<span class='nblack'>".highLight_Signature($Name)."</span>";
-}
-
 sub get_TypeName($$)
 {
     my ($TypeId, $LibVersion) = @_;
@@ -2001,18 +1966,14 @@ sub skip_package($$)
 {
     my ($Package, $LibVersion) = @_;
     return 0 if(not $Package);
-    if(not $KeepInternal)
-    {
-        if($Package=~/\A(com\.oracle|com\.sun|COM\.rsa|sun|sunw)/)
-        { # private packages
-          # http://java.sun.com/products/jdk/faq/faq-sun-packages.html
-            return 1;
-        }
-        if($Package=~/(\A|\.)(internal|impl|examples)(\.|\Z)/)
-        { # internal packages
+    
+    if(defined $SkipInternal)
+    { # --skip-internal=PATTERN
+        if($Package=~/($SkipInternal)/) {
             return 1;
         }
     }
+    
     foreach my $SkipPackage (keys(%{$SkipPackages{$LibVersion}}))
     {
         if($Package=~/(\A|\.)\Q$SkipPackage\E(\.|\Z)/)
@@ -2020,6 +1981,32 @@ sub skip_package($$)
             return 1;
         }
     }
+    
+    if(not defined $KeepInternal)
+    {
+        my $Note = (not keys %SkippedPackage)?" (use --keep-internal option to check them)":"";
+        
+        if($Package=~/\A(com\.oracle|com\.sun|COM\.rsa|sun|sunw)(\.|\Z)/)
+        { # private packages
+          # http://java.sun.com/products/jdk/faq/faq-sun-packages.html
+            if(not $SkippedPackage{$LibVersion}{$1})
+            {
+                $SkippedPackage{$LibVersion}{$1} = 1;
+                printMsg("WARNING", "skip \"$1\" packages".$Note);
+            }
+            return 1;
+        }
+        if($Package=~/(\A|\.)(internal|impl|examples)(\.|\Z)/)
+        { # internal packages
+            if(not $SkippedPackage{$LibVersion}{$Package})
+            {
+                $SkippedPackage{$LibVersion}{$Package} = 1;
+                printMsg("WARNING", "skip \"$Package\" packages".$Note);
+            }
+            return 1;
+        }
+    }
+    
     if(my @Keeped = keys(%{$KeepPackages{$LibVersion}}))
     {
         my $UserKeeped = 0;
@@ -2447,119 +2434,199 @@ sub htmlSpecChars($)
     return $Str;
 }
 
-sub highLight_Signature($) {
-    return highLight_Signature_PPos_Italic($_[0], "", 1, 0);
-}
-
-sub highLight_Signature_Italic($) {
-    return highLight_Signature_PPos_Italic($_[0], "", 1, 0);
-}
-
-sub highLight_Signature_Italic_Color($) {
-    return highLight_Signature_PPos_Italic($_[0], "", 1, 1);
-}
-
-sub highLight_Signature_PPos_Italic($$$$)
+sub black_Name($$)
 {
-    my ($Signature, $Param_Pos, $ItalicParams, $ColorParams) = @_;
-    $Param_Pos = "" if(not defined $Param_Pos);
-    if($Signature!~/\)/)
-    { # global data
-        $Signature = htmlSpecChars($Signature);
-        $Signature =~ s!(\[data\])!<span style='color:Black;font-weight:normal;'>$1</span>!g;
-        return $Signature;
+    my ($M, $V) = @_;
+    return "<span class='nblack'>".highLight_Signature($M, $V)."</span>";
+}
+
+sub black_Name_Str($$)
+{
+    my $Name = $_[0];
+    $Name=~s!\A(\w+)!<span class='nblack'>$1</span>&#160;!g;
+    return $Name;
+}
+
+sub highLight_Signature($$)
+{
+    my ($M, $V) = @_;
+    return get_Signature($M, $V, "HTML|Italic");
+}
+
+sub highLight_Signature_Italic_Color($$)
+{
+    my ($M, $V) = @_;
+    return get_Signature($M, $V, "Full|HTML|Italic|Color");
+}
+
+sub get_Signature($$$)
+{
+    my ($Method, $LibVersion, $Kind) = @_;
+    if(defined $Cache{"get_Signature"}{$LibVersion}{$Method}{$Kind}) {
+        return $Cache{"get_Signature"}{$LibVersion}{$Method}{$Kind};
     }
-    my ($Begin, $End, $Return) = ("", "", "");
-    if($Signature=~s/\s+:(.+)//g) {
-        $Return = $1;
+    
+    # settings
+    my ($Full, $Html, $Italic, $Color, $Target) = (0, 0, 0, 0, undef);
+    
+    if($Kind=~/Full/) {
+        $Full = 1;
     }
-    if($Signature=~/(.+)\(.*\)((| \[static\]| \[abstract\])(| \[(public|private|protected)\]))\Z/)
+    if($Kind=~/HTML/) {
+        $Html = 1;
+    }
+    if($Kind=~/Italic/) {
+        $Italic = 1;
+    }
+    if($Kind=~/Color/) {
+        $Color = 1;
+    }
+    if($Kind=~/Target=(\d+)/) {
+        $Target = 1;
+    }
+    
+    my $Signature = $MethodInfo{$LibVersion}{$Method}{"ShortName"};
+    if($Full)
     {
-        ($Begin, $End) = ($1, $2);
+        my $Class = get_TypeName($MethodInfo{$LibVersion}{$Method}{"Class"}, $LibVersion);
+        
+        if($Html) {
+            $Class = htmlSpecChars($Class);
+        }
+        
+        $Signature = $Class.".".$Signature;
     }
-    $Begin.=" " if($Begin!~/ \Z/);
-    my @Parts = ();
-    my @SParts = get_s_params($Signature, 1);
-    foreach my $Pos (0 .. $#SParts)
+    my @Params = ();
+    foreach my $PPos (sort {int($a)<=>int($b)}
+    keys(%{$MethodInfo{$LibVersion}{$Method}{"Param"}}))
     {
-        my $Part = $SParts[$Pos];
-        $Part=~s/\A\s+|\s+\Z//g;
-        my ($Part_Styled, $ParamName) = (htmlSpecChars($Part), "");
-        if($Part=~/(\w+)[\,\)]*\Z/i) {
-            $ParamName = $1;
-        }
-        if(not $ParamName)
+        my $PTid = $MethodInfo{$LibVersion}{$Method}{"Param"}{$PPos}{"Type"};
+        if(my $PTName = get_TypeName($PTid, $LibVersion))
         {
-            push(@Parts, $Part_Styled);
-            next;
-        }
-        if($ItalicParams and not $TName_Tid{1}{$Part}
-        and not $TName_Tid{2}{$Part})
-        {
-            my $Style = "param";
-            if($Param_Pos ne ""
-            and $Pos==$Param_Pos) {
-                $Style = "focus_p";
+            if($Html) {
+                $PTName = htmlSpecChars($PTName);
             }
-            elsif($ColorParams) {
-                $Style = "color_p";
+            if($Full)
+            {
+                my $PName = $MethodInfo{$LibVersion}{$Method}{"Param"}{$PPos}{"Name"};
+                
+                if($Html)
+                {
+                    my $Style = "param";
+                    if(defined $Target and $Target==$PPos) {
+                        $Style = "focus_p";
+                    }
+                    elsif($Color) {
+                        $Style = "color_p";
+                    }
+                    
+                    $PName = "<span class=\'$Style\'>$PName</span>";
+                }
+                
+                push(@Params, $PTName." ".$PName);
             }
-            $Part_Styled =~ s!(\W)$ParamName([\,\)]|\Z)!$1<span class=\'$Style\'>$ParamName</span>$2!ig;
+            else {
+                push(@Params, $PTName);
+            }
         }
-        push(@Parts, $Part_Styled);
     }
-    if(@Parts)
+    if($Html)
     {
-        foreach my $Num (0 .. $#Parts)
+        $Signature .= "&#160;";
+        $Signature .= "<span class='sym_p'>";
+        if(@Params)
         {
-            if($Num==$#Parts)
-            { # add ")" to the last parameter
-                $Parts[$Num] = "<span class='nowrap'>".$Parts[$Num]." )</span>";
-            }
-            elsif(length($Parts[$Num])<=45) {
-                $Parts[$Num] = "<span class='nowrap'>".$Parts[$Num]."</span>";
+            foreach my $Pos (0 .. $#Params)
+            {
+                my $Name = "";
+                
+                if($Pos==0) {
+                    $Name .= "(&#160;";
+                }
+                
+                $Name .= $Params[$Pos];
+                
+                if($Pos==$#Params) {
+                    $Name .= "&#160;)";
+                }
+                else {
+                    $Name .= ", ";
+                }
+                
+                $Name = "<span class='nowrap'>".$Name."</span>";
+                
+                $Signature .= $Name;
             }
         }
-        $Signature = htmlSpecChars($Begin)."<span class='sym_p'>(&#160;".join(" ", @Parts)."</span>";
+        else {
+            $Signature .= "(&#160;)";
+        }
+        $Signature .= "</span>";
     }
     else {
-        $Signature = htmlSpecChars($Begin)."<span class='sym_p'>(&#160;)</span>";
+        $Signature .= "(".join(", ", @Params).")";
     }
-    if($End and $ColorParams) {
-        $Signature .= $End;
-    }
-    if($Return and $ColorParams) {
-        $Signature .= "<span class='sym_p nowrap'> &#160;<b>:</b>&#160;&#160;".htmlSpecChars($Return)."</span>";
-    }
-    $Signature=~s!\[\]![&#160;]!g;
-    $Signature=~s!operator=!operator&#160;=!g;
-    $Signature=~s!(\[static\]|\[abstract\])!<span class='sym_kind'>$1</span>!g;
-    $Signature=~s!(\[public\]|\[private\]|\[protected\])!<span class='sym_kind'>$1</span>!g;
-    return $Signature;
-}
-
-sub get_s_params($$)
-{
-    my ($Signature, $Comma) = @_;
-    if($Signature=~/\((.+)\)/)
+    if($Full)
     {
-        my @Params = split(/,\s*/, $1);
-        if($Comma)
+        if($MethodInfo{$LibVersion}{$Method}{"Static"}) {
+            $Signature .= " [static]";
+        }
+        elsif($MethodInfo{$LibVersion}{$Method}{"Abstract"}) {
+            $Signature .= " [abstract]";
+        }
+        
+        if($ShowAccess)
         {
-            foreach (0 .. $#Params)
+            if(my $Access = $MethodInfo{$LibVersion}{$Method}{"Access"})
             {
-                if($_!=$#Params) {
-                    $Params[$_].=",";
+                if($Access ne "public") {
+                    $Signature .= " [".$Access."]";
                 }
             }
         }
-        return @Params;
+        if(my $ReturnId = $MethodInfo{$LibVersion}{$Method}{"Return"})
+        {
+            my $RName = get_TypeName($ReturnId, $LibVersion);
+            
+            if($Html) {
+                $Signature .= "<span class='sym_p nowrap'> &#160;<b>:</b>&#160;&#160;".htmlSpecChars($RName)."</span>";
+            }
+            else {
+                $Signature .= " :".$RName;
+            }
+        }
+        
+        if(not $SkipDeprecated)
+        {
+            if($MethodInfo{$LibVersion}{$Method}{"Deprecated"}) {
+                $Signature .= " *DEPRECATED*";
+            }
+        }
+        
+        $Signature=~s/java\.lang\.//g;
+        
+        if($Html)
+        {
+            $Signature=~s!(\[static\]|\[abstract\]|\[public\]|\[private\]|\[protected\])!<span class='attr'>$1</span>!g;
+            
+            if(not $SkipDeprecated) {
+                $Signature=~s!(\*deprecated\*)!<span class='deprecated'>$1</span>!ig;
+            }
+        }
     }
-    return ();
+    
+    if($Html)
+    {
+        $Signature=~s!\[\]![&#160;]!g;
+        $Signature=~s!operator=!operator&#160;=!g;
+    }
+    
+    $Cache{"get_Signature"}{$LibVersion}{$Method}{$Kind} = $Signature;
+    return $Cache{"get_Signature"}{$LibVersion}{$Method}{$Kind};
 }
 
 sub checkJavaCompiler($)
-{# check javac: compile simple program
+{ # check javac: compile simple program
     my $Cmd = $_[0];
     return if(not $Cmd);
     writeFile($TMP_DIR."/test_javac/Simple.java",
@@ -3059,6 +3126,7 @@ sub get_Summary($)
     $TestInfo .= "<tr><th>Library Name</th><td>$TargetLibraryFullName</td></tr>\n";
     $TestInfo .= "<tr><th>Version #1</th><td>".$Descriptor{1}{"Version"}."</td></tr>\n";
     $TestInfo .= "<tr><th>Version #2</th><td>".$Descriptor{2}{"Version"}."</td></tr>\n";
+    $TestInfo .= "<tr><th>Java Version</th><td>".$JAVA_VERSION."</td></tr>\n";
     if($JoinReport)
     {
         if($Level eq "Binary") {
@@ -3266,11 +3334,11 @@ sub get_Report_Implementation()
                 foreach my $Method (@SortedMethods)
                 {
                     $Changed_Number += 1;
-                    my $Signature = $MethodInfo{1}{$Method}{"Signature"};
+                    my $Signature = highLight_Signature_Italic_Color($Method, 1);
                     if($NameSpace) {
                         $Signature=~s/(\W|\A)\Q$NameSpace\E\.(\w)/$1$2/g;
                     }
-                    my $SubReport = insertIDs($ContentSpanStart.highLight_Signature_Italic_Color($Signature).$ContentSpanEnd."<br/>\n".$ContentDivStart."<span class='mangled'>[run-time name: <b>".htmlSpecChars($Method)."</b>]</span>".$ImplProblems{$Method}{"Diff"}."<br/><br/>".$ContentDivEnd."\n");
+                    my $SubReport = insertIDs($ContentSpanStart.$Signature.$ContentSpanEnd."<br/>\n".$ContentDivStart."<span class='mangled'>[mangled: <b>".htmlSpecChars($Method)."</b>]</span>".$ImplProblems{$Method}{"Diff"}."<br/><br/>".$ContentDivEnd."\n");
                     $CHANGED_IMPLEMENTATION .= $SubReport;
                 }
             }
@@ -3323,11 +3391,11 @@ sub get_Report_Added($)
                 foreach my $Method (@SortedMethods)
                 {
                     $Added_Number += 1;
-                    my $Signature = $MethodInfo{2}{$Method}{"Signature"};
+                    my $Signature = highLight_Signature_Italic_Color($Method, 2);
                     if($NameSpace) {
                         $Signature=~s/(\W|\A)\Q$NameSpace\E\.(\w)/$1$2/g;
                     }
-                    $ADDED_METHODS .= insertIDs($ContentSpanStart.highLight_Signature_Italic_Color($Signature).$ContentSpanEnd."<br/>\n".$ContentDivStart."<span class='mangled'>[run-time name: <b>".htmlSpecChars($Method)."</b>]</span><br/><br/>".$ContentDivEnd."\n");
+                    $ADDED_METHODS .= insertIDs($ContentSpanStart.$Signature.$ContentSpanEnd."<br/>\n".$ContentDivStart."<span class='mangled'>[mangled: <b>".htmlSpecChars($Method)."</b>]</span><br/><br/>".$ContentDivEnd."\n");
                 }
             }
             $ADDED_METHODS .= "<br/>\n";
@@ -3384,11 +3452,11 @@ sub get_Report_Removed($)
                 foreach my $Method (@SortedMethods)
                 {
                     $Removed_Number += 1;
-                    my $Signature = $MethodInfo{1}{$Method}{"Signature"};
+                    my $Signature = highLight_Signature_Italic_Color($Method, 1);
                     if($NameSpace) {
                         $Signature=~s/(\W|\A)\Q$NameSpace\E\.(\w)/$1$2/g;
                     }
-                    $REMOVED_METHODS .= insertIDs($ContentSpanStart.highLight_Signature_Italic_Color($Signature).$ContentSpanEnd."<br/>\n".$ContentDivStart."<span class='mangled'>[run-time name: <b>".htmlSpecChars($Method)."</b>]</span><br/><br/>".$ContentDivEnd."\n");
+                    $REMOVED_METHODS .= insertIDs($ContentSpanStart.$Signature.$ContentSpanEnd."<br/>\n".$ContentDivStart."<span class='mangled'>[mangled: <b>".htmlSpecChars($Method)."</b>]</span><br/><br/>".$ContentDivEnd."\n");
                 }
             }
             $REMOVED_METHODS .= "<br/>\n";
@@ -3439,7 +3507,6 @@ sub get_Report_MethodProblems($$)
                 my @SortedMethods = sort {lc($MethodInfo{1}{$a}{"Signature"}) cmp lc($MethodInfo{1}{$b}{"Signature"})} keys(%{$NameSpace_Method{$NameSpace}});
                 foreach my $Method (@SortedMethods)
                 {
-                    my $Signature = $MethodInfo{1}{$Method}{"Signature"};
                     my $ShortSignature = get_Signature($Method, 1, "Short");
                     my $ClassName_Full = get_TypeName($MethodInfo{1}{$Method}{"Class"}, 1);
                     my $MethodProblemsReport = "";
@@ -3581,7 +3648,7 @@ sub get_Report_MethodProblems($$)
                     $ProblemNum -= 1;
                     if($MethodProblemsReport)
                     {
-                        $NAMESPACE_REPORT .= $ContentSpanStart."<span class='extension'>[+]</span> ".highLight_Signature_Italic_Color($Signature)." ($ProblemNum)".$ContentSpanEnd."<br/>\n$ContentDivStart<span class='mangled'>&#160;&#160;[run-time name: <b>".htmlSpecChars($Method)."</b>]</span><br/>\n";
+                        $NAMESPACE_REPORT .= $ContentSpanStart."<span class='extension'>[+]</span> ".highLight_Signature_Italic_Color($Method, 1)." ($ProblemNum)".$ContentSpanEnd."<br/>\n$ContentDivStart<span class='mangled'>&#160;&#160;&#160;[mangled: <b>".htmlSpecChars($Method)."</b>]</span><br/>\n";
                         if($NameSpace) {
                             $NAMESPACE_REPORT=~s/(\W|\A)\Q$NameSpace\E\.(\w)/$1$2/g;
                         }
@@ -3684,7 +3751,7 @@ sub get_Report_TypeProblems($$)
                         {
                             my $ShortSignature = get_Signature($Target, 2, "Short");
                             my $ClassName_Full = get_TypeName($MethodInfo{2}{$Target}{"Class"}, 2);
-                            $Change = "Abstract method ".black_name($MethodInfo{2}{$Target}{"Signature"})." has been added to this $Type_Type.";
+                            $Change = "Abstract method ".black_Name($Target, 2)." has been added to this $Type_Type.";
                             if($Level eq "Binary") {
                                 $Effect = "This class became <b>abstract</b> and a client program may be interrupted by <b>InstantiationError</b> exception.";
                             }
@@ -3696,7 +3763,7 @@ sub get_Report_TypeProblems($$)
                         {
                             my $ShortSignature = get_Signature($Target, 2, "Short");
                             my $ClassName_Full = get_TypeName($MethodInfo{2}{$Target}{"Class"}, 2);
-                            $Change = "Abstract method ".black_name($MethodInfo{2}{$Target}{"Signature"})." has been added to this $Type_Type.";
+                            $Change = "Abstract method ".black_Name($Target, 2)." has been added to this $Type_Type.";
                             if($Level eq "Binary")
                             {
                                 if($Add_Effect) {
@@ -3715,7 +3782,7 @@ sub get_Report_TypeProblems($$)
                         {
                             my $ShortSignature = get_Signature($Target, 1, "Short");
                             my $ClassName_Full = get_TypeName($MethodInfo{1}{$Target}{"Class"}, 1);
-                            $Change = "Abstract method ".black_name($MethodInfo{1}{$Target}{"Signature"})." has been removed from this $Type_Type.";
+                            $Change = "Abstract method ".black_Name($Target, 1)." has been removed from this $Type_Type.";
                             if($Level eq "Binary") {
                                 $Effect = "A client program may be interrupted by <b>NoSuchMethodError</b> exception.";
                             }
@@ -3727,7 +3794,7 @@ sub get_Report_TypeProblems($$)
                         {
                             my $ShortSignature = get_Signature($Target, 2, "Short");
                             my $ClassName_Full = get_TypeName($MethodInfo{2}{$Target}{"Class"}, 2);
-                            $Change = "Abstract method ".black_name($MethodInfo{2}{$Target}{"Signature"})." has been added to this $Type_Type.";
+                            $Change = "Abstract method ".black_Name($Target, 2)." has been added to this $Type_Type.";
                             if($Level eq "Binary")
                             {
                                 if($Add_Effect) {
@@ -3745,7 +3812,7 @@ sub get_Report_TypeProblems($$)
                         {
                             my $ShortSignature = get_Signature($Target, 1, "Short");
                             my $ClassName_Full = get_TypeName($MethodInfo{1}{$Target}{"Class"}, 1);
-                            $Change = "Method ".black_name($MethodInfo{1}{$Target}{"Signature"})." became <b>abstract</b>.";
+                            $Change = "Method ".black_Name($Target, 1)." became <b>abstract</b>.";
                             if($Level eq "Binary") {
                                 $Effect = "A client program may be interrupted by <b>InstantiationError</b> exception.";
                             }
@@ -3755,18 +3822,18 @@ sub get_Report_TypeProblems($$)
                         }
                         elsif($Kind eq "Class_Method_Became_NonAbstract")
                         {
-                            $Change = "Abstract method ".black_name($MethodInfo{1}{$Target}{"Signature"})." became <b>non-abstract</b>.";
+                            $Change = "Abstract method ".black_Name($Target, 1)." became <b>non-abstract</b>.";
                             $Effect = "Some methods in this class may change behavior.";
                         }
                         elsif($Kind eq "Class_Overridden_Method")
                         {
-                            $Change = "Method ".black_name($Old_Value)." has been overridden by ".black_name($New_Value);
-                            $Effect = "Method ".black_name($New_Value)." will be called instead of ".black_name($Old_Value)." in a client program.";
+                            $Change = "Method ".black_Name($Old_Value, 2)." has been overridden by ".black_Name($New_Value, 2);
+                            $Effect = "Method ".black_Name($New_Value, 2)." will be called instead of ".black_Name($Old_Value, 2)." in a client program.";
                         }
                         elsif($Kind eq "Class_Method_Moved_Up_Hierarchy")
                         {
-                            $Change = "Method ".black_name($Old_Value)." has been moved up type hierarchy to ".black_name($New_Value);
-                            $Effect = "Method ".black_name($New_Value)." will be called instead of ".black_name($Old_Value)." in a client program.";
+                            $Change = "Method ".black_Name($Old_Value, 1)." has been moved up type hierarchy to ".black_Name($New_Value, 2);
+                            $Effect = "Method ".black_Name($New_Value, 2)." will be called instead of ".black_Name($Old_Value, 1)." in a client program.";
                         }
                         elsif($Kind eq "Abstract_Class_Added_Super_Interface")
                         {
@@ -3915,7 +3982,7 @@ sub get_Report_TypeProblems($$)
                         }
                         elsif($Kind eq "Removed_NonConstant_Field")
                         {
-                            $Change = "Field <b>$Target</b> (".htmlSpecChars($Field_Type).") has been removed from this $Type_Type.";
+                            $Change = "Field <b>$Target</b> of type ".htmlSpecChars($Field_Type)." has been removed from this $Type_Type.";
                             if($Level eq "Binary") {
                                 $Effect = "A client program may be interrupted by <b>NoSuchFieldError</b> exception.";
                             }
@@ -4164,18 +4231,19 @@ sub getAffectedMethods($$$$)
                 
                 my $Param_Pos = $CompatProblems{$Method}{$Kind}{$Location}{"Parameter_Position"};
                 my $Description = getAffectDesc($Method, $Kind, $Location, $Level);
-                $Affected .=  "<span class='nblack'>".highLight_Signature_PPos_Italic($MethodInfo{1}{$Method}{"Signature"}, $Param_Pos, 1, 0)."</span><br/>"."<div class='affect'>".$Description."</div>\n";
+                $Affected .= "<span class='nblack'>".get_Signature($Method, 1, "HTML|Italic|Target=".$Param_Pos)."</span><br/>";
+                $Affected .= "<div class='affect'>".$Description."</div>\n";
             }
         }
     }
-    $Affected = "<div class='affected'>".$Affected."</div>";
     if(keys(%INumber)>$LIMIT) {
-        $Affected .= "and others ...<br/>";
+        $Affected .= " ...<br/>"; # and others ...
     }
+    $Affected = "<div class='affected'>".$Affected."</div>";
     if($Affected)
     {
         $Affected =  $ContentDivStart.$Affected.$ContentDivEnd;
-        $Affected =  $ContentSpanStart_Affected."[+] affected methods (".(keys(%INumber)>$LIMIT?"more than $LIMIT":keys(%INumber).")").$ContentSpanEnd.$Affected;
+        $Affected =  $ContentSpanStart_Affected."[+] affected methods (".(keys(%INumber)>$LIMIT?">".$LIMIT:keys(%INumber)).")".$ContentSpanEnd.$Affected;
     }
     return ($Affected);
 }
@@ -4184,25 +4252,23 @@ sub getAffectDesc($$$$)
 {
     my ($Method, $Kind, $Location, $Level) = @_;
     my %Affect = %{$CompatProblems{$Method}{$Kind}{$Location}};
-    my $Signature = $MethodInfo{1}{$Method}{"Signature"};
-    my $Old_Value = $Affect{"Old_Value"};
     my $New_Value = $Affect{"New_Value"};
     my $Type_Name = $Affect{"Type_Name"};
     my $Parameter_Name = $Affect{"Parameter_Name"};
     my $Parameter_Position_Str = showPos($Affect{"Parameter_Position"});
     my @Sentence_Parts = ();
     
-    my $Location_I = $Location;
     $Location=~s/\.[^.]+?\Z//;
     
     my %TypeAttr = get_Type($MethodInfo{1}{$Method}{"Class"}, 1);
     my $Type_Type = $TypeAttr{"Type"};
+    
     my $ABSTRACT_M = $MethodInfo{1}{$Method}{"Abstract"}?" abstract":"";
     my $ABSTRACT_C = $TypeAttr{"Abstract"}?" abstract":"";
     my $METHOD_TYPE = $MethodInfo{1}{$Method}{"Constructor"}?"constructor":"method";
     
     if($Kind eq "Class_Overridden_Method" or $Kind eq "Class_Method_Moved_Up_Hierarchy") {
-        return "Method '".highLight_Signature($New_Value)."' will be called instead of this method in a client program.";
+        return "Method '".highLight_Signature($New_Value, 2)."' will be called instead of this method in a client program.";
     }
     elsif($TypeProblems_Kind{$Level}{$Kind})
     {
@@ -4499,9 +4565,13 @@ sub getReport($)
         font-weight:normal;
         white-space:normal;
     }
-    span.sym_kind {
+    span.attr {
         color:Black;
-        font-weight:normal;
+        font-weight:100;
+    }
+    span.deprecated {
+        color:Red;
+        font-weight:bold;
     }
     div.affect {
         padding-left:15px;
@@ -4530,6 +4600,7 @@ sub getReport($)
     table.ptable th {
         background-color:#eeeeee;
         font-weight:bold;
+        color:#333333;
         font-size:13px;
         font-family:Verdana;
         border:1px solid Gray;
@@ -6221,13 +6292,30 @@ sub readClasses($$$)
         my $LINE = $Content[$LineNum++];
         next if($LINE=~/\A\s*(?:const|#\d|AnnotationDefault|Compiled|Source|Constant|RuntimeVisibleAnnotations)/);
         next if($LINE=~/\sof\s|\sline \d+:|\[\s*class|= \[| \$|\$\d| class\$/);
-        if(index($LINE, "<V"))
-        { # Java 7: templates
-          # <V extends java.lang.Object>
-            $LINE=~s/<V .+?>/<V>/;
+        
+        # Java 7: templates
+        if(index($LINE, "<")!=-1)
+        { # <T extends java.lang.Object>
+            if($LINE=~/<[A-Z] /)
+            {
+                while($LINE=~/<([A-Z] .*?)>( |\Z)/)
+                {
+                    my $Str = $1;
+                    my @Prms = ();
+                    foreach my $P (separate_Params($Str))
+                    {
+                        $P=~s/\A([A-Z]) .*\Z/$1/g;
+                        push(@Prms, $P);
+                    }
+                    my $Str_N = join(", ", @Prms);
+                    $LINE=~s/\Q$Str\E/$Str_N/g;
+                }
+            }
         }
+        
         $LINE=~s/\s*,\s*/,/g;
         $LINE=~s/\$/#/g;
+        
         if(index($LINE, "LocalVariableTable")!=-1) {
             $InParamTable += 1;
         }
@@ -6304,6 +6392,7 @@ sub readClasses($$$)
             $InCode = 0; # read the first code
             ($MethodAttr{"Return"}, $MethodAttr{"ShortName"}, $ParamsLine, $Exceptions) = ($2, $3, $4, $6);
             $MethodAttr{"ShortName"}=~s/#/./g;
+            
             if($Exceptions)
             {
                 foreach my $E (split(/,/, $Exceptions)) {
@@ -6334,8 +6423,11 @@ sub readClasses($$$)
                 $MethodAttr{"Return"} = registerType($ReturnName, $LibVersion);
             }
             
+            
+            my @Params = separate_Params($ParamsLine, 0, 1);
+            
             $ParamPos = 0;
-            foreach my $ParamTName (split(/\s*,\s*/, $ParamsLine))
+            foreach my $ParamTName (@Params)
             {
                 %{$MethodAttr{"Param"}{$ParamPos}} = ("Type"=>registerType($ParamTName, $LibVersion), "Name"=>"p".($ParamPos+1));
                 $ParamPos++;
@@ -6437,7 +6529,8 @@ sub readClasses($$$)
               # Java 7: ConstantValue: ...
                 $LineNum+=1;
                 my ($TName, $Value) = ($1, $2);
-                if($Value) {
+                if($Value)
+                {
                     if($Value=~s/Deprecated:\s*true\Z//g) {
                         # deprecated values: ?
                     }
@@ -6456,6 +6549,7 @@ sub readClasses($$$)
             }
             
             %TypeAttr = ("Type"=>$2, "Name"=>$3); # reset previous class
+            
             $FieldPos = 0; # reset field position
             $CurrentMethod = ""; # reset current method
             $TypeAttr{"Archive"} = $ArchiveName;
@@ -6515,7 +6609,8 @@ sub readClasses($$$)
         { # deprecated method
             $TypeAttr{"Deprecated"} = 1;
         }
-        else {
+        else
+        {
             # unparsed
         }
     }
@@ -6523,6 +6618,42 @@ sub readClasses($$$)
     { # register last
         %{$TypeInfo{$LibVersion}{registerType($TypeAttr{"Name"}, $LibVersion)}} = %TypeAttr;
     }
+}
+
+sub separate_Params($$$)
+{
+    my ($Params, $Comma, $Sp) = @_;
+    my @Parts = ();
+    my %B = ( "("=>0, "<"=>0, ")"=>0, ">"=>0 );
+    my $Part = 0;
+    foreach my $Pos (0 .. length($Params) - 1)
+    {
+        my $S = substr($Params, $Pos, 1);
+        if(defined $B{$S}) {
+            $B{$S} += 1;
+        }
+        if($S eq "," and
+        $B{"("}==$B{")"} and $B{"<"}==$B{">"})
+        {
+            if($Comma)
+            { # include comma
+                $Parts[$Part] .= $S;
+            }
+            $Part += 1;
+        }
+        else {
+            $Parts[$Part] .= $S;
+        }
+    }
+    if(not $Sp)
+    { # remove spaces
+        foreach (@Parts)
+        {
+            s/\A //g;
+            s/ \Z//g;
+        }
+    }
+    return @Parts;
 }
 
 sub registerUsage($$)
@@ -6572,8 +6703,8 @@ sub detectAdded()
                     %{$CompatProblems{$Overridden}{"Class_Overridden_Method"}{"this.".get_SFormat($Method)}}=(
                         "Type_Name"=>$Class{"Name"},
                         "Target"=>$MethodInfo{2}{$Method}{"Signature"},
-                        "Old_Value"=>$MethodInfo{2}{$Overridden}{"Signature"},
-                        "New_Value"=>$MethodInfo{2}{$Method}{"Signature"}  );
+                        "Old_Value"=>$Overridden,
+                        "New_Value"=>$Method  );
                 }
             }
             if($MethodInfo{2}{$Method}{"Abstract"}) {
@@ -6623,8 +6754,8 @@ sub detectRemoved()
                     %{$CompatProblems{$Method}{"Class_Method_Moved_Up_Hierarchy"}{"this.".get_SFormat($MovedUp)}}=(
                         "Type_Name"=>$Class{"Name"},
                         "Target"=>$MethodInfo{2}{$MovedUp}{"Signature"},
-                        "Old_Value"=>$MethodInfo{1}{$Method}{"Signature"},
-                        "New_Value"=>$MethodInfo{2}{$MovedUp}{"Signature"}  );
+                        "Old_Value"=>$Method,
+                        "New_Value"=>$MovedUp  );
                 }
             }
             else {
@@ -7084,12 +7215,17 @@ sub detect_default_paths()
         $SystemPaths{"bin"}{$Path} = $DefaultBinPaths{$Path};
     }
     
-    if(my $JavaCmd = get_CmdPath("java"))
+    if(not $TestSystem)
     {
-        if(my $Ver = `$JavaCmd -version 2>&1`)
+        if(my $JavaCmd = get_CmdPath("java"))
         {
-            if($Ver=~/java version "(.+)\"/) {
-                printMsg("INFO", "Using Java $1");
+            if(my $Ver = `$JavaCmd -version 2>&1`)
+            {
+                if($Ver=~/java version "(.+)\"/)
+                {
+                    $JAVA_VERSION = $1;
+                    printMsg("INFO", "using Java ".$JAVA_VERSION);
+                }
             }
         }
     }
