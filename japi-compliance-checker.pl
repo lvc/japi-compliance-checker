@@ -1998,10 +1998,10 @@ sub skip_package($$)
         }
         if($Package=~/(\A|\.)(internal|impl|examples)(\.|\Z)/)
         { # internal packages
-            if(not $SkippedPackage{$LibVersion}{$Package})
+            if(not $SkippedPackage{$LibVersion}{$2})
             {
-                $SkippedPackage{$LibVersion}{$Package} = 1;
-                printMsg("WARNING", "skip \"$Package\" packages".$Note);
+                $SkippedPackage{$LibVersion}{$2} = 1;
+                printMsg("WARNING", "skip \"$2\" packages".$Note);
             }
             return 1;
         }
