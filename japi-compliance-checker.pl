@@ -6244,10 +6244,10 @@ sub readClasses_Usage($)
     open(CONTENT, "$JavapCmd -c -private $Input |");
     while(<CONTENT>)
     {
-        if(/\/\/(Method|InterfaceMethod)\s+(.+)\Z/) {
+        if(/\/\/( ?Method|InterfaceMethod)\s+(.+)\Z/) {
             $UsedMethods_Client{$2} = 1;
         }
-        elsif(/\/\/Field\s+(.+)\Z/)
+        elsif(/\/\/ ?Field\s+(.+)\Z/)
         {
             my $FieldName = $1;
             if(/\s+(putfield|getfield|getstatic|putstatic)\s+/) {
