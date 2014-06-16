@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 ###########################################################################
-# Java API Compliance Checker (Java ACC) 1.3.8
+# Java API Compliance Checker (Java ACC) 1.3.9
 # A tool for checking backward compatibility of a Java library API
 #
 # Copyright (C) 2011 Institute for System Programming, RAS
@@ -45,7 +45,7 @@ use Cwd qw(abs_path cwd);
 use Data::Dumper;
 use Config;
 
-my $TOOL_VERSION = "1.3.8";
+my $TOOL_VERSION = "1.3.9";
 my $API_DUMP_VERSION = "1.0";
 my $API_DUMP_MAJOR = majorVersion($API_DUMP_VERSION);
 
@@ -1078,7 +1078,9 @@ sub unpackDump($)
     $Path = path_format($Path, $OSgroup);
     my ($Dir, $FileName) = separate_path($Path);
     my $UnpackDir = $TMP_DIR."/unpack";
-    rmtree($UnpackDir);
+    if(-d $UnpackDir) {
+        rmtree($UnpackDir);
+    }
     mkpath($UnpackDir);
     if($FileName=~s/\Q.zip\E\Z//g)
     { # *.zip
@@ -2709,11 +2711,15 @@ sub runTests($$$$)
     { # remove test source
         unlink($TestSrc);
     }
-    rmtree($TestsPath."/$PackageName");
-    mkpath($TestsPath."/$PackageName/");
+    
+    my $PkgPath = $TestsPath."/".$PackageName;
+    if(-d $PkgPath) {
+        rmtree($PkgPath);
+    }
+    mkpath($PkgPath);
     foreach my $ClassPath (cmd_find($Path_v2,"","*\.class",""))
     {# create a run-time package copy
-        copy($ClassPath, $TestsPath."/$PackageName/");
+        copy($ClassPath, $PkgPath."/");
     }
     my $TEST_REPORT = "";
     foreach my $TestPath (cmd_find($TestsPath,"","*\.class",1))
@@ -2736,7 +2742,10 @@ sub runTests($$$$)
         $TEST_REPORT .= "\n";
     }
     writeFile("$TestsPath/Journal.txt", $TEST_REPORT);
-    rmtree($TestsPath."/$PackageName");
+    
+    if(-d $PkgPath) {
+        rmtree($PkgPath);
+    }
 }
 
 sub compileJavaLib($$$)
@@ -4996,13 +5005,19 @@ sub readArchives($)
 sub testSystem()
 {
     printMsg("INFO", "\nverifying detectable Java library changes");
+    
     my $LibName = "libsample_java";
-    rmtree($LibName);
+    if(-d $LibName) {
+        rmtree($LibName);
+    }
+    
     my $PackageName = "TestPackage";
     my $Path_v1 = "$LibName/$PackageName.v1/$PackageName";
     mkpath($Path_v1);
+    
     my $Path_v2 = "$LibName/$PackageName.v2/$PackageName";
     mkpath($Path_v2);
+    
     my $TestsPath = "$LibName/Tests";
     mkpath($TestsPath);
     
@@ -6093,7 +6108,9 @@ sub readArchive($$)
         exitStatus("Not_Found", "can't find \"jar\" command");
     }
     my $ExtractPath = "$TMP_DIR/".($ExtractCounter++);
-    rmtree($ExtractPath);
+    if(-d $ExtractPath) {
+        rmtree($ExtractPath);
+    }
     mkpath($ExtractPath);
     chdir($ExtractPath);
     system($JarCmd." -xf \"$Path\"");
@@ -6244,10 +6261,10 @@ sub readClasses_Usage($)
     open(CONTENT, "$JavapCmd -c -private $Input |");
     while(<CONTENT>)
     {
-        if(/\/\/(Method|InterfaceMethod)\s+(.+)\Z/) {
+        if(/\/\/\s*(Method|InterfaceMethod)\s+(.+)\Z/) {
             $UsedMethods_Client{$2} = 1;
         }
-        elsif(/\/\/Field\s+(.+)\Z/)
+        elsif(/\/\/\s*Field\s+(.+)\Z/)
         {
             my $FieldName = $1;
             if(/\s+(putfield|getfield|getstatic|putstatic)\s+/) {
@@ -6303,7 +6320,9 @@ sub readClasses($$$)
         $Input=~s/\$/\\\$/g;
     }
     my $Output = $TMP_DIR."/class-dump.txt";
-    rmtree($Output);
+    if(-e $Output) {
+        unlink($Output);
+    }
     my $Cmd = "$JavapCmd -s -private";
     if(not $Quick) {
         $Cmd .= " -c -verbose";
@@ -6398,7 +6417,7 @@ sub readClasses($$$)
                     }
                 }
                 elsif($LibVersion==2 and defined $MethodInfo{1}{$CurrentMethod}
-                and $LINE=~/\/\/Field\s+(.+)\Z/)
+                and $LINE=~/\/\/\s*Field\s+(.+)\Z/)
                 {
                     my $UsedFieldName = $1;
                     $FieldUsed{$UsedFieldName}{$CurrentMethod} = 1;
@@ -7405,7 +7424,10 @@ sub initLogging($)
     if($Debug)
     { # debug directory
         $DEBUG_PATH{$LibVersion} = "debug/$TargetLibraryName/".$Descriptor{$LibVersion}{"Version"};
-        rmtree($DEBUG_PATH{$LibVersion});
+        
+        if(-d $DEBUG_PATH{$LibVersion}) {
+            rmtree($DEBUG_PATH{$LibVersion});
+        }
     }
 }
 
