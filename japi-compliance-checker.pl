@@ -1,13 +1,14 @@
 #!/usr/bin/perl
 ###########################################################################
-# Java API Compliance Checker (Java ACC) 1.3.9
+# Java API Compliance Checker (Java ACC) 1.4.0
 # A tool for checking backward compatibility of a Java library API
 #
 # Copyright (C) 2011 Institute for System Programming, RAS
-# Copyright (C) 2011 Russian Linux Verification Center
 # Copyright (C) 2011-2014 ROSA Laboratory
+# Copyright (C) 2014-2015 Andrey Ponomarenko's ABI laboratory
 #
 # Written by Andrey Ponomarenko
+# LinkedIn: http://www.linkedin.com/pub/andrey-ponomarenko/67/366/818
 #
 # PLATFORMS
 # =========
@@ -16,11 +17,11 @@
 # REQUIREMENTS
 # ============
 #  Linux, FreeBSD, Mac OS X
-#    - JDK (javap, javac)
+#    - JDK<=1.7 (javap, javac) - development files
 #    - Perl 5 (5.8 or newer)
 #
 #  MS Windows
-#    - JDK (javap, javac)
+#    - JDK<=1.7 (javap, javac)
 #    - Active Perl 5 (5.8 or newer)
 #  
 # This program is free software: you can redistribute it and/or modify
@@ -45,7 +46,7 @@ use Cwd qw(abs_path cwd);
 use Data::Dumper;
 use Config;
 
-my $TOOL_VERSION = "1.3.9";
+my $TOOL_VERSION = "1.4.0";
 my $API_DUMP_VERSION = "1.0";
 my $API_DUMP_MAJOR = majorVersion($API_DUMP_VERSION);
 
@@ -55,7 +56,8 @@ $StrictCompat, $DumpVersion, $BinaryOnly, $TargetLibraryFullName, $CheckImpl,
 %TargetVersion, $SourceOnly, $ShortMode, $KeepInternal, $OutputReportPath,
 $BinaryReportPath, $SourceReportPath, $Browse, $Debug, $Quick, $SortDump,
 $OpenReport, $SkipDeprecated, $SkipClasses, $ShowAccess, $AffectLimit,
-$JdkPath, $SkipInternal, $HideTemplates, $HidePackages, $Minimal);
+$JdkPath, $SkipInternal, $HideTemplates, $HidePackages, $Minimal, 
+$AnnotationsListPath);
 
 my $CmdName = get_filename($0);
 my $OSgroup = get_OSgroup();
@@ -148,6 +150,7 @@ GetOptions("h|help!" => \$Help,
   "skip-internal=s" => \$SkipInternal,
   "dump|dump-api=s" => \$DumpAPI,
   "classes-list=s" => \$ClassListPath,
+  "annotations-list=s" => \$AnnotationsListPath,
   "skip-deprecated!" => \$SkipDeprecated,
   "skip-classes=s" => \$SkipClasses,
   "short" => \$ShortMode,
@@ -335,6 +338,11 @@ EXTRA OPTIONS:
   -classes-list PATH
       This option allows to specify a file with a list
       of classes that should be checked, other classes will not be checked.
+  
+  -annotations-list PATH
+      Specifies a file with a list of annotations. The tool will check only
+      classes annotated by the annotations from this list. Other classes
+      will not be checked.
       
   -skip-deprecated
       Skip analysis of deprecated methods and classes.
@@ -677,6 +685,9 @@ my %Class_Fields;
 my %MethodInvoked;
 my %ClassMethod_AddedInvoked;
 my %FieldUsed;
+
+#Annotations
+my %AnnotationList_User;
 
 #Methods
 my %CheckedMethods;
@@ -1942,16 +1953,39 @@ sub methodFilter($$)
     my $ClassId = $MethodInfo{$LibVersion}{$Method}{"Class"};
     my %Class = get_Type($ClassId, $LibVersion);
     my $Package = $MethodInfo{$LibVersion}{$Method}{"Package"};
+    
+    if($AnnotationsListPath)
+    {
+        my $Annotated = 0;
+        
+        foreach my $ANum (keys(%{$Class{"Annotations"}}))
+        {
+            my $AName = $TypeInfo{$LibVersion}{$ANum}{"Name"};
+            
+            if(defined $AnnotationList_User{$AName})
+            {
+                $Annotated = 1;
+                last;
+            }
+        }
+        
+        if(not $Annotated) {
+            return 0;
+        }
+    }
+    
     if($ClassListPath
     and not $ClassList_User{$Class{"Name"}})
     { # user defined classes
         return 0;
     }
+    
     if($SkipClasses
     and $SkipClass_User{$Class{"Name"}})
     { # user defined classes
         return 0;
     }
+    
     if($ClientPath)
     { # user defined application
         if(not $UsedMethods_Client{$Method}
@@ -1959,10 +1993,12 @@ sub methodFilter($$)
             return 0;
         }
     }
+    
     if(skip_package($Package, $LibVersion))
     { # internal packages
         return 0;
     }
+    
     if(defined $SkipDeprecated)
     {
         if($Class{"Deprecated"})
@@ -1974,6 +2010,7 @@ sub methodFilter($$)
             return 0;
         }
     }
+    
     return 1;
 }
 
@@ -6341,26 +6378,52 @@ sub readClasses($$$)
     my @Content = <CONTENT>;
     close(CONTENT);
     my (%TypeAttr, $CurrentMethod, $CurrentPackage, $CurrentClass) = ();
-    my ($InParamTable, $InExceptionTable, $InCode) = (0, 0);
+    my ($InParamTable, $InExceptionTable, $InCode) = (0, 0, 0);
+    
+    my $InAnnotations = undef;
+    my %AnnotationNums = ();
+    
     my ($ParamPos, $FieldPos, $LineNum) = (0, 0, 0);
     while($LineNum<=$#Content)
     {
         my $LINE = $Content[$LineNum++];
-        next if($LINE=~/\A\s*(?:const|#\d|AnnotationDefault|Compiled|Source|Constant|RuntimeVisibleAnnotations)/);
+        
+        next if($LINE=~/\A\s*(?:const|AnnotationDefault|Compiled|Source|Constant)/);
         next if($LINE=~/\sof\s|\sline \d+:|\[\s*class|= \[| \$|\$\d| class\$/);
+        
+        if($LINE=~/\A\s*#(\d+)/)
+        { # Contant pool
+            my $CNum = $1;
+            if(defined $AnnotationNums{$CNum})
+            {
+                if($LINE=~/\s+([^ ]+?);/)
+                {
+                    my $AName = $1;
+                    $AName=~s/\AL//;
+                    $AName=~s/\A.*\///g;
+                    $AName=~s/\$/./g;
+                    
+                    $TypeAttr{"Annotations"}{registerType($AName, $LibVersion)} = 1;
+                }
+                delete($AnnotationNums{$CNum});
+            }
+            
+            next;
+        }
         
         # Java 7: templates
         if(index($LINE, "<")!=-1)
         { # <T extends java.lang.Object>
-            if($LINE=~/<[A-Z] /)
+          # <KEYIN extends java.lang.Object ...
+            if($LINE=~/<[A-Z\d\?]+ /)
             {
-                while($LINE=~/<([A-Z\?] .*?)>( |\Z)/)
+                while($LINE=~/<([A-Z\d\?]+ .*?)>( |\Z)/)
                 {
                     my $Str = $1;
                     my @Prms = ();
-                    foreach my $P (separate_Params($Str))
+                    foreach my $P (separate_Params($Str, 0, 0))
                     {
-                        $P=~s/\A([A-Z\?]) .*\Z/$1/g;
+                        $P=~s/\A([A-Z\d\?]+) .*\Z/$1/g;
                         push(@Prms, $P);
                     }
                     my $Str_N = join(", ", @Prms);
@@ -6378,8 +6441,10 @@ sub readClasses($$$)
         elsif($LINE=~/Exception\s+table/) {
             $InExceptionTable = 1;
         }
-        elsif($LINE=~/\A\s*Code:/) {
+        elsif($LINE=~/\A\s*Code:/)
+        {
             $InCode += 1;
+            $InAnnotations = undef;
         }
         elsif($LINE=~/\A\s*\d+:\s*(.*)\Z/)
         { # read Code
@@ -6423,6 +6488,12 @@ sub readClasses($$$)
                     $FieldUsed{$UsedFieldName}{$CurrentMethod} = 1;
                 }
             }
+            else
+            {
+                if(defined $InAnnotations and $LINE=~/\A\s*\d+\:\s*#(\d+)/) {
+                    $AnnotationNums{$1} = 1;
+                }
+            }
         }
         elsif($CurrentMethod and $InParamTable==1 and $LINE=~/\A\s+0\s+\d+\s+\d+\s+(\w+)/)
         { # read parameter names from LocalVariableTable
@@ -6444,8 +6515,11 @@ sub readClasses($$$)
         elsif($CurrentClass and $LINE=~/(\A|\s+)([^\s]+)\s+([^\s]+)\s*\((.*)\)\s*(throws\s*([^\s]+)|)\s*;\Z/)
         { # attributes of methods and constructors
             my (%MethodAttr, $ParamsLine, $Exceptions) = ();
+            
             $InParamTable = 0; # read the first local variable table
             $InCode = 0; # read the first code
+            %AnnotationNums = (); # reset annotations of the class
+            
             ($MethodAttr{"Return"}, $MethodAttr{"ShortName"}, $ParamsLine, $Exceptions) = ($2, $3, $4, $6);
             $MethodAttr{"ShortName"}=~s/#/./g;
             
@@ -6478,7 +6552,6 @@ sub readClasses($$$)
                 my $ReturnName = $MethodAttr{"Return"};
                 $MethodAttr{"Return"} = registerType($ReturnName, $LibVersion);
             }
-            
             
             my @Params = separate_Params($ParamsLine, 0, 1);
             
@@ -6605,6 +6678,7 @@ sub readClasses($$$)
             }
             
             %TypeAttr = ("Type"=>$2, "Name"=>$3); # reset previous class
+            %AnnotationNums = (); # reset annotations of the class
             
             $FieldPos = 0; # reset field position
             $CurrentMethod = ""; # reset current method
@@ -6632,18 +6706,25 @@ sub readClasses($$$)
             }
             if($LINE=~/\s+extends\s+([^\s\{]+)/)
             {
+                my $Extended = $1;
+                
                 if($TypeAttr{"Type"} eq "class") {
-                    $TypeAttr{"SuperClass"} = registerType($1, $LibVersion);
+                    $TypeAttr{"SuperClass"} = registerType($Extended, $LibVersion);
                 }
-                elsif($TypeAttr{"Type"} eq "interface") {
-                    foreach my $SuperInterface (split(/,/, $1)) {
+                elsif($TypeAttr{"Type"} eq "interface")
+                {
+                    my @Elems = separate_Params($Extended, 0, 0);
+                    foreach my $SuperInterface (@Elems) {
                         $TypeAttr{"SuperInterface"}{registerType($SuperInterface, $LibVersion)} = 1;
                     }
                 }
             }
             if($LINE=~/\s+implements\s+([^\s\{]+)/)
             {
-                foreach my $SuperInterface (split(/,/, $1)) {
+                my $Implemented = $1;
+                my @Elems = separate_Params($Implemented, 0, 0);
+                
+                foreach my $SuperInterface (@Elems) {
                     $TypeAttr{"SuperInterface"}{registerType($SuperInterface, $LibVersion)} = 1;
                 }
             }
@@ -6664,6 +6745,12 @@ sub readClasses($$$)
         elsif($CurrentClass and index($LINE, "Deprecated: length")!=-1)
         { # deprecated method
             $TypeAttr{"Deprecated"} = 1;
+        }
+        elsif(index($LINE, "RuntimeInvisibleAnnotations")!=-1) {
+            $InAnnotations = 1;
+        }
+        elsif(defined $InAnnotations and index($LINE, "InnerClasses")!=-1) {
+            $InAnnotations = undef;
         }
         else
         {
@@ -7533,8 +7620,6 @@ sub scenario()
         $Data::Dumper::Sortkeys = \&dump_sorting;
     }
     
-    
-    
     if(defined $TestSystem)
     {
         detect_default_paths();
@@ -7603,6 +7688,16 @@ sub scenario()
         {
             $Class=~s/\//./g;
             $ClassList_User{$Class} = 1;
+        }
+    }
+    if($AnnotationsListPath)
+    {
+        if(not -f $AnnotationsListPath) {
+            exitStatus("Access_Error", "can't access file \'$AnnotationsListPath\'");
+        }
+        foreach my $Annotation (split(/\n/, readFile($AnnotationsListPath)))
+        {
+            $AnnotationList_User{$Annotation} = 1;
         }
     }
     if($SkipClasses)

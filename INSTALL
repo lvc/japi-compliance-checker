@@ -1,15 +1,16 @@
 
 Copyright (C) 2011 Institute for System Programming, RAS
-Copyright (C) 2011 Russian Linux Verification Center
 Copyright (C) 2011-2014 ROSA Laboratory
+Copyright (C) 2014-2015 Andrey Ponomarenko's ABI laboratory
+
 All rights reserved.
 
 
 RELEASE INFORMATION
 
 Project:           Java API Compliance Checker (Java ACC)
-Version:           1.3.9
-Date:              2014-06-16
+Version:           1.4.0
+Date:              2015-01-10
 
 
 This file explains how to install and setup environment
@@ -28,7 +29,7 @@ Content:
 1. REQUIREMENTS FOR LINUX, FREEBSD and MAC OS X
 ===============================================
 
-   1. JDK (javap, javac)
+   1. JDK<=1.7 (javap, javac) - development files
    2. Perl 5 (5.8 or newer)
 
 
@@ -36,7 +37,7 @@ Content:
 2. REQUIREMENTS FOR MS WINDOWS
 ==============================
 
-   1. JDK (javap, javac)
+   1. JDK<=1.7 (javap, javac)
    2. Active Perl 5 (5.8 or newer)
 
 
