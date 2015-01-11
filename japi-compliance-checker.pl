@@ -6746,7 +6746,8 @@ sub readClasses($$$)
         { # deprecated method
             $TypeAttr{"Deprecated"} = 1;
         }
-        elsif(index($LINE, "RuntimeInvisibleAnnotations")!=-1) {
+        elsif(index($LINE, "RuntimeInvisibleAnnotations")!=-1
+        or index($LINE, "RuntimeVisibleAnnotations")!=-1) {
             $InAnnotations = 1;
         }
         elsif(defined $InAnnotations and index($LINE, "InnerClasses")!=-1) {
