@@ -6585,7 +6585,7 @@ sub readClasses($$$)
             }
             
             # read the Signature
-            if($Content[$LineNum++]=~/Signature:\s*(.+)\Z/i)
+            if($Content[$LineNum++]=~/(Signature|descriptor):\s*(.+)\Z/i)
             { # create run-time unique name ( java/io/PrintStream.println (Ljava/lang/String;)V )
                 if($MethodAttr{"Constructor"}) {
                     $CurrentMethod = $CurrentClass.".\"<init>\":".$1;
@@ -6640,7 +6640,7 @@ sub readClasses($$$)
             }
             $TypeAttr{"Fields"}{$FName}{"Pos"} = $FieldPos++;
             # read the Signature
-            if($Content[$LineNum++]=~/Signature:\s*(.+)\Z/i)
+            if($Content[$LineNum++]=~/(Signature|descriptor):\s*(.+)\Z/i)
             {
                 my $FSignature = $1;
                 if(my $PackageName = get_SFormat($CurrentPackage)) {
