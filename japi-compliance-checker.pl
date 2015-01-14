@@ -7365,7 +7365,7 @@ sub detect_default_paths()
         {
             if(my $Ver = `$JavaCmd -version 2>&1`)
             {
-                if($Ver=~/java version "(.+)\"/)
+                if($Ver=~/(java|openjdk) version "(.+)\"/)
                 {
                     $JAVA_VERSION = $1;
                     printMsg("INFO", "using Java ".$JAVA_VERSION);
