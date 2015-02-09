@@ -6588,10 +6588,10 @@ sub readClasses($$$)
             if($Content[$LineNum++]=~/(Signature|descriptor):\s*(.+)\Z/i)
             { # create run-time unique name ( java/io/PrintStream.println (Ljava/lang/String;)V )
                 if($MethodAttr{"Constructor"}) {
-                    $CurrentMethod = $CurrentClass.".\"<init>\":".$1;
+                    $CurrentMethod = $CurrentClass.".\"<init>\":".$2;
                 }
                 else {
-                    $CurrentMethod = $CurrentClass.".".$MethodAttr{"ShortName"}.":".$1;
+                    $CurrentMethod = $CurrentClass.".".$MethodAttr{"ShortName"}.":".$2;
                 }
                 if(my $PackageName = get_SFormat($CurrentPackage)) {
                     $CurrentMethod = $PackageName."/".$CurrentMethod;
@@ -6642,7 +6642,7 @@ sub readClasses($$$)
             # read the Signature
             if($Content[$LineNum++]=~/(Signature|descriptor):\s*(.+)\Z/i)
             {
-                my $FSignature = $1;
+                my $FSignature = $2;
                 if(my $PackageName = get_SFormat($CurrentPackage)) {
                     $TypeAttr{"Fields"}{$FName}{"Mangled"} = $PackageName."/".$CurrentClass.".".$FName.":".$FSignature;
                 }
