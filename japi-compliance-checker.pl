@@ -1,14 +1,14 @@
 #!/usr/bin/perl
 ###########################################################################
-# Java API Compliance Checker (Java ACC) 1.4.0
+# Java API Compliance Checker (Java ACC) 1.4.1
 # A tool for checking backward compatibility of a Java library API
+#
+# Written by Andrey Ponomarenko
+# LinkedIn: http://www.linkedin.com/pub/andrey-ponomarenko/67/366/818
 #
 # Copyright (C) 2011 Institute for System Programming, RAS
 # Copyright (C) 2011-2014 ROSA Laboratory
 # Copyright (C) 2014-2015 Andrey Ponomarenko's ABI laboratory
-#
-# Written by Andrey Ponomarenko
-# LinkedIn: http://www.linkedin.com/pub/andrey-ponomarenko/67/366/818
 #
 # PLATFORMS
 # =========
@@ -17,11 +17,11 @@
 # REQUIREMENTS
 # ============
 #  Linux, FreeBSD, Mac OS X
-#    - JDK<=1.7 (javap, javac) - development files
+#    - JDK<=1.8 (javap, javac) - development files
 #    - Perl 5 (5.8 or newer)
 #
 #  MS Windows
-#    - JDK<=1.7 (javap, javac)
+#    - JDK<=1.8 (javap, javac)
 #    - Active Perl 5 (5.8 or newer)
 #  
 # This program is free software: you can redistribute it and/or modify
@@ -46,7 +46,7 @@ use Cwd qw(abs_path cwd);
 use Data::Dumper;
 use Config;
 
-my $TOOL_VERSION = "1.4.0";
+my $TOOL_VERSION = "1.4.1";
 my $API_DUMP_VERSION = "1.0";
 my $API_DUMP_MAJOR = majorVersion($API_DUMP_VERSION);
 
@@ -97,7 +97,7 @@ my %HomePage = (
 
 my $ShortUsage = "Java API Compliance Checker (Java ACC) $TOOL_VERSION
 A tool for checking backward compatibility of a Java library API
-Copyright (C) 2014 ROSA Laboratory
+Copyright (C) 2015 Andrey Ponomarenko's ABI laboratory
 License: GNU LGPL or GNU GPL
 
 Usage: $CmdName [options]
@@ -6585,13 +6585,13 @@ sub readClasses($$$)
             }
             
             # read the Signature
-            if($Content[$LineNum++]=~/Signature:\s*(.+)\Z/i)
+            if($Content[$LineNum++]=~/(Signature|descriptor):\s*(.+)\Z/i)
             { # create run-time unique name ( java/io/PrintStream.println (Ljava/lang/String;)V )
                 if($MethodAttr{"Constructor"}) {
-                    $CurrentMethod = $CurrentClass.".\"<init>\":".$1;
+                    $CurrentMethod = $CurrentClass.".\"<init>\":".$2;
                 }
                 else {
-                    $CurrentMethod = $CurrentClass.".".$MethodAttr{"ShortName"}.":".$1;
+                    $CurrentMethod = $CurrentClass.".".$MethodAttr{"ShortName"}.":".$2;
                 }
                 if(my $PackageName = get_SFormat($CurrentPackage)) {
                     $CurrentMethod = $PackageName."/".$CurrentMethod;
@@ -6640,9 +6640,9 @@ sub readClasses($$$)
             }
             $TypeAttr{"Fields"}{$FName}{"Pos"} = $FieldPos++;
             # read the Signature
-            if($Content[$LineNum++]=~/Signature:\s*(.+)\Z/i)
+            if($Content[$LineNum++]=~/(Signature|descriptor):\s*(.+)\Z/i)
             {
-                my $FSignature = $1;
+                my $FSignature = $2;
                 if(my $PackageName = get_SFormat($CurrentPackage)) {
                     $TypeAttr{"Fields"}{$FName}{"Mangled"} = $PackageName."/".$CurrentClass.".".$FName.":".$FSignature;
                 }
@@ -7365,9 +7365,9 @@ sub detect_default_paths()
         {
             if(my $Ver = `$JavaCmd -version 2>&1`)
             {
-                if($Ver=~/java version "(.+)\"/)
+                if($Ver=~/(java|openjdk) version "(.+)\"/)
                 {
-                    $JAVA_VERSION = $1;
+                    $JAVA_VERSION = $2;
                     printMsg("INFO", "using Java ".$JAVA_VERSION);
                 }
             }
@@ -7604,7 +7604,7 @@ sub scenario()
     }
     if(defined $ShowVersion)
     {
-        printMsg("INFO", "Java API Compliance Checker (Java ACC) $TOOL_VERSION\nCopyright (C) 2014 ROSA Laboratory\nLicense: LGPL or GPL <http://www.gnu.org/licenses/>\nThis program is free software: you can redistribute it and/or modify it.\n\nWritten by Andrey Ponomarenko.");
+        printMsg("INFO", "Java API Compliance Checker (Java ACC) $TOOL_VERSION\nCopyright (C) 2015 Andrey Ponomarenko's ABI laboratory\nLicense: LGPL or GPL <http://www.gnu.org/licenses/>\nThis program is free software: you can redistribute it and/or modify it.\n\nWritten by Andrey Ponomarenko.");
         exit(0);
     }
     if(defined $DumpVersion)
