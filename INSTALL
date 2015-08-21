@@ -1,7 +1,6 @@
 
 Copyright (C) 2011 Institute for System Programming, RAS
-Copyright (C) 2011-2014 ROSA Laboratory
-Copyright (C) 2014-2015 Andrey Ponomarenko's ABI laboratory
+Copyright (C) 2014-2015 Andrey Ponomarenko's ABI Laboratory
 
 All rights reserved.
 
@@ -9,8 +8,8 @@ All rights reserved.
 RELEASE INFORMATION
 
 Project:           Java API Compliance Checker (Java ACC)
-Version:           1.4.1
-Date:              2015-03-03
+Version:           1.4.2
+Date:              2015-08-21
 
 
 This file explains how to install and setup environment
@@ -50,11 +49,7 @@ Content:
 
      sudo perl Makefile.pl -install --prefix=PREFIX [/usr, /usr/local, ...]
 
-3.1 Update
-
-     sudo perl Makefile.pl -update --prefix=PREFIX
-
-3.2 Remove
+3.1 Remove
 
      sudo perl Makefile.pl -remove --prefix=PREFIX
 
@@ -82,7 +77,7 @@ Content:
             </archives>
 
    2. japi-compliance-checker -lib NAME -old OLD.xml -new NEW.xml
-   3. For more advanced usage, see doc/Readme.html
+   3. For advanced usage, see output of -help option.
 
 
 

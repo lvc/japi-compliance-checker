@@ -4,6 +4,10 @@ NAME:
 INSTALL:
   sudo perl Makefile.pl -install --prefix=/usr
 
+REQUIRES:
+  JDK
+  Perl 5
+
 USAGE:
   japi-compliance-checker OLD.jar NEW.jar
 
