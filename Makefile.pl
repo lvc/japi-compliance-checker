@@ -51,7 +51,7 @@ OPTIONS:
       Print this help.
 
   --prefix=PREFIX
-      Install files in PREFIX [/usr/local].
+      Install files in PREFIX [/usr].
 
   -install
       Command to install the tool.
