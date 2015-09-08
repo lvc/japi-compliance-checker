@@ -9,7 +9,7 @@ RELEASE INFORMATION
 
 Project:           Java API Compliance Checker (Java ACC)
 Version:           1.4.2
-Date:              2015-09-06
+Date:              2015-09-08
 
 
 This file explains how to install and setup environment
@@ -28,7 +28,7 @@ Content:
 1. REQUIREMENTS FOR LINUX, FREEBSD and MAC OS X
 ===============================================
 
-   1. JDK<=1.8 (javap, javac) - development files
+   1. JDK <= 1.8 (javap, javac) - development files
    2. Perl 5 (5.8 or newer)
 
 
@@ -36,7 +36,7 @@ Content:
 2. REQUIREMENTS FOR MS WINDOWS
 ==============================
 
-   1. JDK<=1.8 (javap, javac)
+   1. JDK <= 1.8 (javap, javac)
    2. Active Perl 5 (5.8 or newer)
 
 
@@ -47,11 +47,11 @@ Content:
    This command will install an japi-compliance-checker program in the
    PREFIX/bin system directory:
 
-     sudo perl Makefile.pl -install --prefix=PREFIX [/usr, /usr/local, ...]
+     sudo make install prefix=PREFIX [/usr, /usr/local, ...]
 
 3.1 Remove
 
-     sudo perl Makefile.pl -remove --prefix=PREFIX
+     sudo make uninstall prefix=PREFIX
 
 
 
