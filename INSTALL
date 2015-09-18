@@ -1,6 +1,6 @@
 
 Copyright (C) 2011 Institute for System Programming, RAS
-Copyright (C) 2014-2015 Andrey Ponomarenko's ABI Laboratory
+Copyright (C) 2011-2015 Andrey Ponomarenko's ABI Laboratory
 
 All rights reserved.
 
@@ -8,8 +8,8 @@ All rights reserved.
 RELEASE INFORMATION
 
 Project:           Java API Compliance Checker (Java ACC)
-Version:           1.4.2
-Date:              2015-09-08
+Version:           1.4.3
+Date:              2015-09-18
 
 
 This file explains how to install and setup environment

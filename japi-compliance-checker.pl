@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 ###########################################################################
-# Java API Compliance Checker (Java ACC) 1.4.2
+# Java API Compliance Checker (Java ACC) 1.4.3
 # A tool for checking backward compatibility of a Java library API
 #
 # Written by Andrey Ponomarenko
@@ -16,11 +16,11 @@
 # REQUIREMENTS
 # ============
 #  Linux, FreeBSD, Mac OS X
-#    - JDK<=1.8 (javap, javac) - development files
+#    - JDK <= 1.8 (javap, javac) - development files
 #    - Perl 5 (5.8 or newer)
 #
 #  MS Windows
-#    - JDK<=1.8 (javap, javac)
+#    - JDK <= 1.8 (javap, javac)
 #    - Active Perl 5 (5.8 or newer)
 #  
 # This program is free software: you can redistribute it and/or modify
@@ -45,7 +45,7 @@ use Cwd qw(abs_path cwd);
 use Data::Dumper;
 use Config;
 
-my $TOOL_VERSION = "1.4.2";
+my $TOOL_VERSION = "1.4.3";
 my $API_DUMP_VERSION = "1.0";
 my $API_DUMP_MAJOR = majorVersion($API_DUMP_VERSION);
 
@@ -2867,7 +2867,7 @@ sub get_Report_Header($)
     else {
         $Report_Header .= "API compatibility";
     }
-    $Report_Header .= " report for the <span style='color:Blue;'>$TargetTitle library </span> between <span style='color:Red;'>".$Descriptor{1}{"Version"}."</span> and <span style='color:Red;'>".$Descriptor{2}{"Version"}."</span> versions";
+    $Report_Header .= " report for the <span style='color:Blue;'>$TargetTitle</span> library between <span style='color:Red;'>".$Descriptor{1}{"Version"}."</span> and <span style='color:Red;'>".$Descriptor{2}{"Version"}."</span> versions";
     if($ClientPath) {
         $Report_Header .= " (relating to the portability of client application <span style='color:Blue;'>".get_filename($ClientPath)."</span>)";
     }
@@ -3089,7 +3089,7 @@ sub get_Summary($)
     $TestInfo .= "<tr><th>Library Name</th><td>$TargetTitle</td></tr>\n";
     $TestInfo .= "<tr><th>Version #1</th><td>".$Descriptor{1}{"Version"}."</td></tr>\n";
     $TestInfo .= "<tr><th>Version #2</th><td>".$Descriptor{2}{"Version"}."</td></tr>\n";
-    $TestInfo .= "<tr><th>Java Version</th><td>".$JAVA_VERSION."</td></tr>\n";
+    # $TestInfo .= "<tr><th>Java Version</th><td>".$JAVA_VERSION."</td></tr>\n";
     if($JoinReport)
     {
         if($Level eq "Binary") {
