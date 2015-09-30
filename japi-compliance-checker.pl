@@ -692,6 +692,9 @@ sub get_CmdPath($)
     { # search for *.exe file
         $Path=search_Cmd($Name.".exe");
     }
+    if (not $Path) {
+        $Path=search_Cmd_Path($Name);
+    }
     if($Path=~/\s/) {
         $Path = "\"".$Path."\"";
     }
@@ -718,13 +721,23 @@ sub search_Cmd($)
     if(my $DefaultPath = get_CmdPath_Default($Name)) {
         return ($Cache{"search_Cmd"}{$Name} = $DefaultPath);
     }
+    return ($Cache{"search_Cmd"}{$Name} = "");
+}
+
+sub search_Cmd_Path($)
+{
+    my $Name = $_[0];
+    return "" if(not $Name);
+    if(defined $Cache{"search_Cmd_Path"}{$Name}) {
+        return $Cache{"search_Cmd_Path"}{$Name};
+    }
     foreach my $Path (sort {length($a)<=>length($b)} keys(%{$SystemPaths{"bin"}}))
     {
         if(-f $Path."/".$Name or -f $Path."/".$Name.".exe") {
-            return ($Cache{"search_Cmd"}{$Name} = joinPath($Path,$Name));
+            return ($Cache{"search_Cmd_Path"}{$Name} = joinPath($Path,$Name));
         }
     }
-    return ($Cache{"search_Cmd"}{$Name} = "");
+    return ($Cache{"search_Cmd_Path"}{$Name} = "");
 }
 
 sub get_CmdPath_Default($)
