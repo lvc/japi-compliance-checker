@@ -9,7 +9,7 @@ INSTALL:
   sudo make install prefix=/usr
 
 REQUIRES:
-  JDK
+  JDK - development files
   Perl 5
 
 USAGE:
