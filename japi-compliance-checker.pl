@@ -1101,17 +1101,13 @@ sub unpackDump($)
                 exitStatus("Not_Found", "can't find \"tar\" command");
             }
             chdir($UnpackDir);
-            system("$TarCmd -xvzf \"$Path\" >contents.txt");
-            if($?) {
+            my @Contents = `$TarCmd -xvzf "$Path" 2>&1`;
+            if($? or not @Contents) {
                 exitStatus("Error", "can't extract \'$Path\'");
             }
             chdir($ORIG_DIR);
-            # The content file name may be different
-            # from the package file name
-            my @Contents = split("\n", readFile("$UnpackDir/contents.txt"));
-            if(not @Contents) {
-                exitStatus("Error", "can't extract \'$Path\'");
-            }
+            $Contents[0] =~ s/^x //;
+            chomp $Contents[0];
             return joinPath($UnpackDir, $Contents[0]);
         }
     }
