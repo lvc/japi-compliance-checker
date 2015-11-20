@@ -344,6 +344,10 @@ EXTRA OPTIONS:
       This option allows to specify a file with a list
       of classes that should not be checked.
       
+  -skip-packages PATH
+      This option allows to specify a file with a list
+      of packages that should not be checked.
+      
   -short PATH
       Generate short report without 'Added Methods' section.
 
