@@ -16,11 +16,11 @@
 # REQUIREMENTS
 # ============
 #  Linux, FreeBSD, Mac OS X
-#    - JDK <= 1.8 (javap, javac) - development files
+#    - JDK - development files (javap, javac)
 #    - Perl 5 (5.8 or newer)
 #
 #  MS Windows
-#    - JDK <= 1.8 (javap, javac)
+#    - JDK (javap, javac)
 #    - Active Perl 5 (5.8 or newer)
 #  
 # This program is free software: you can redistribute it and/or modify
@@ -53,9 +53,10 @@ my ($Help, $ShowVersion, %Descriptor, $TargetLibraryName, $CheckSeparately,
 $TestSystem, $DumpAPI, $ClassListPath, $ClientPath, $StrictCompat,
 $DumpVersion, $BinaryOnly, $TargetTitle, %TargetVersion, $SourceOnly,
 $ShortMode, $KeepInternal, $OutputReportPath, $BinaryReportPath,
-$SourceReportPath, $Debug, $Quick, $SortDump, $SkipDeprecated, $SkipClasses,
+$SourceReportPath, $Debug, $Quick, $SortDump, $SkipDeprecated, $SkipClassesList,
 $ShowAccess, $AffectLimit, $JdkPath, $SkipInternal, $HideTemplates,
-$HidePackages, $ShowPackages, $Minimal, $AnnotationsListPath);
+$HidePackages, $ShowPackages, $Minimal, $AnnotationsListPath,
+$SkipPackagesList);
 
 my $CmdName = get_filename($0);
 my $OSgroup = get_OSgroup();
@@ -149,7 +150,8 @@ GetOptions("h|help!" => \$Help,
   "classes-list=s" => \$ClassListPath,
   "annotations-list=s" => \$AnnotationsListPath,
   "skip-deprecated!" => \$SkipDeprecated,
-  "skip-classes=s" => \$SkipClasses,
+  "skip-classes=s" => \$SkipClassesList,
+  "skip-packages=s" => \$SkipPackagesList,
   "short" => \$ShortMode,
   "report-path=s" => \$OutputReportPath,
   "bin-report-path=s" => \$BinaryReportPath,
@@ -498,7 +500,8 @@ my %TypeProblems_Kind=(
         "Changed_Field_Access"=>"High",
         "Field_Became_Final"=>"Medium",
         "Constant_Field_Became_NonStatic"=>"High",
-        "NonConstant_Field_Became_NonStatic"=>"High"
+        "NonConstant_Field_Became_NonStatic"=>"High",
+        "Removed_Annotation"=>"High"
     }
 );
 
@@ -622,7 +625,6 @@ my %Class_Constructed;
 
 #Classes
 my %ClassList_User;
-my %SkipClass_User;
 my %UsedMethods_Client;
 my %UsedFields_Client;
 my %UsedClasses_Client;
@@ -648,6 +650,7 @@ my $Version;
 my %AddedMethod_Abstract;
 my %RemovedMethod_Abstract;
 my %ChangedReturnFromVoid;
+my %SkipClasses;
 my %SkipPackages;
 my %KeepPackages;
 my %SkippedPackage;
@@ -692,6 +695,9 @@ sub get_CmdPath($)
     { # search for *.exe file
         $Path=search_Cmd($Name.".exe");
     }
+    if (not $Path) {
+        $Path=search_Cmd_Path($Name);
+    }
     if($Path=~/\s/) {
         $Path = "\"".$Path."\"";
     }
@@ -718,13 +724,25 @@ sub search_Cmd($)
     if(my $DefaultPath = get_CmdPath_Default($Name)) {
         return ($Cache{"search_Cmd"}{$Name} = $DefaultPath);
     }
+    return ($Cache{"search_Cmd"}{$Name} = "");
+}
+
+sub search_Cmd_Path($)
+{
+    my $Name = $_[0];
+    return "" if(not $Name);
+    
+    if(defined $Cache{"search_Cmd_Path"}{$Name}) {
+        return $Cache{"search_Cmd_Path"}{$Name};
+    }
     foreach my $Path (sort {length($a)<=>length($b)} keys(%{$SystemPaths{"bin"}}))
     {
         if(-f $Path."/".$Name or -f $Path."/".$Name.".exe") {
-            return ($Cache{"search_Cmd"}{$Name} = joinPath($Path,$Name));
+            return ($Cache{"search_Cmd_Path"}{$Name} = joinPath($Path,$Name));
         }
     }
-    return ($Cache{"search_Cmd"}{$Name} = "");
+
+    return ($Cache{"search_Cmd_Path"}{$Name} = "");
 }
 
 sub get_CmdPath_Default($)
@@ -1078,40 +1096,33 @@ sub unpackDump($)
                 exitStatus("Not_Found", "can't find \"gzip\" command");
             }
             chdir($UnpackDir);
-            system("$GzipCmd -k -d -f \"$Path\"");# keep input files (-k)
+            qx/$GzipCmd -k -d -f "$Path"/; # keep input files (-k)
             if($?) {
                 exitStatus("Error", "can't extract \'$Path\'");
             }
-            system("$TarCmd -xvf \"$Dir\\$FileName.tar\" >contents.txt");
-            if($?) {
+            my @Contents = qx/$TarCmd -xvf "$Dir\\$FileName.tar"/;
+            if($? or not @Contents) {
                 exitStatus("Error", "can't extract \'$Path\'");
             }
             chdir($ORIG_DIR);
             unlink($Dir."/".$FileName.".tar");
-            my @Contents = split("\n", readFile("$UnpackDir/contents.txt"));
-            if(not @Contents) {
-                exitStatus("Error", "can't extract \'$Path\'");
-            }
+            chomp $Contents[0];
             return joinPath($UnpackDir, $Contents[0]);
         }
         else
-        { # Unix
+        { # Linux, Unix, OS X
             my $TarCmd = get_CmdPath("tar");
             if(not $TarCmd) {
                 exitStatus("Not_Found", "can't find \"tar\" command");
             }
             chdir($UnpackDir);
-            system("$TarCmd -xvzf \"$Path\" >contents.txt");
-            if($?) {
+            my @Contents = qx/$TarCmd -xvzf "$Path" 2>&1/;
+            if($? or not @Contents) {
                 exitStatus("Error", "can't extract \'$Path\'");
             }
             chdir($ORIG_DIR);
-            # The content file name may be different
-            # from the package file name
-            my @Contents = split("\n", readFile("$UnpackDir/contents.txt"));
-            if(not @Contents) {
-                exitStatus("Error", "can't extract \'$Path\'");
-            }
+            $Contents[0]=~s/^x //; # OS X
+            chomp $Contents[0];
             return joinPath($UnpackDir, $Contents[0]);
         }
     }
@@ -1148,6 +1159,28 @@ sub mergeClasses()
                         "Type_Name"=>$ClassName,
                         "Target"=>$ClassName  );
                 }
+            }
+        }
+    }
+    
+    foreach my $Class_Id (keys(%{$TypeInfo{1}}))
+    {
+        my %Class1 = get_Type($Class_Id, 1);
+        
+        if(defined $Class1{"Access"}
+        and $Class1{"Access"}=~/private/) {
+            next;
+        }
+        
+        my $ClassName = $Class1{"Name"};
+        
+        if(not $TName_Tid{2}{$ClassName})
+        {
+            if(defined $Class1{"Annotation"})
+            {
+                %{$CompatProblems{"client_method"}{"Removed_Annotation"}{"this"}} = (
+                    "Type_Name"=>$ClassName,
+                    "Target"=>$ClassName  );
             }
         }
     }
@@ -1927,8 +1960,8 @@ sub methodFilter($$)
         return 0;
     }
     
-    if($SkipClasses
-    and $SkipClass_User{$Class{"Name"}})
+    if($SkipClassesList
+    and $SkipClasses{$Class{"Name"}})
     { # user defined classes
         return 0;
     }
@@ -3637,6 +3670,7 @@ sub get_Report_TypeProblems($$)
             my @SortedTypes = sort {lc($a) cmp lc($b)} keys(%{$NameSpace_Type{$NameSpace}});
             foreach my $TypeName (@SortedTypes)
             {
+                my $TypeId = $TName_Tid{1}{$TypeName};
                 my $ProblemNum = 1;
                 my ($TypeProblemsReport, %Kinds_Locations, %Kinds_Target) = ();
                 foreach my $Kind (sort keys(%{$TypeChanges{$TypeName}}))
@@ -4039,6 +4073,16 @@ sub get_Report_TypeProblems($$)
                                 $Effect = "Recompilation of a client program may be terminated with the message: cannot find class <b>".htmlSpecChars($TypeName)."</b>.";
                             }
                         }
+                        elsif($Kind eq "Removed_Annotation")
+                        {
+                            $Change = "This annotation type has been removed.";
+                            if($Level eq "Binary") {
+                                $Effect = "No effect.";
+                            }
+                            else {
+                                $Effect = "Recompilation of a client program may be terminated with the error message: cannot find symbol <b>\@".htmlSpecChars($TypeName)."</b>.";
+                            }
+                        }
                         if($Change)
                         {
                             $TypeProblemsReport .= "<tr><th align='center' valign='top'>$ProblemNum</th><td align='left' valign='top'>".$Change."</td><td align='left' valign='top'>".$Effect."</td></tr>\n";
@@ -4051,7 +4095,12 @@ sub get_Report_TypeProblems($$)
                 $ProblemNum -= 1;
                 if($TypeProblemsReport)
                 {
-                    my $Affected = getAffectedMethods($Level, $TypeName, \%Kinds_Locations, \@Methods);
+                    my $Affected = "";
+                    
+                    if(not defined $TypeInfo{1}{$TypeId}{"Annotation"}) {
+                        $Affected = getAffectedMethods($Level, $TypeName, \%Kinds_Locations, \@Methods);
+                    }
+                    
                     $NAMESPACE_REPORT .= $ContentSpanStart."<span class='extendable'>[+]</span> ".htmlSpecChars($TypeName)." ($ProblemNum)".$ContentSpanEnd."<br/>\n";
                     $NAMESPACE_REPORT .= $ContentDivStart."<table class='ptable'><tr>";
                     $NAMESPACE_REPORT .= "<th width='2%'></th><th width='47%'>Change</th><th>Effect</th>";
@@ -4440,6 +4489,7 @@ sub getReport($)
     span.deprecated {
         color:Red;
         font-weight:bold;
+        font-family:Monaco, monospace;
     }
     div.affect {
         padding-left:15px;
@@ -4695,8 +4745,8 @@ sub getReportFooter()
 {
     my $Footer = "";
     $Footer .= "<hr/>";
-    $Footer .= "<div class='footer' align='right'><i>Generated on ".(localtime time);
-    $Footer .= " by <a href='".$HomePage{"Dev"}."'>Java API Compliance Checker</a> $TOOL_VERSION &#160;";
+    $Footer .= "<div class='footer' align='right'><i>Generated by ";
+    $Footer .= "<a href='".$HomePage{"Dev"}."'>Java API Compliance Checker</a> $TOOL_VERSION &#160;";
     $Footer .= "</i></div>";
     $Footer .= "<br/>";
     return $Footer;
@@ -4860,6 +4910,12 @@ sub testSystem()
     }";
     writeFile($Path_v1."/BaseAbstractClass.java", $BaseAbstractClass);
     writeFile($Path_v2."/BaseAbstractClass.java", $BaseAbstractClass);
+    
+    # Removed_Annotation
+    writeFile($Path_v1."/RemovedAnnotation.java",
+    "package $PackageName;
+    public \@interface RemovedAnnotation {
+    }");
     
     # BaseClass
     my $BaseClass = "package $PackageName;
@@ -5081,6 +5137,18 @@ sub testSystem()
         public static void main(String[] args) {
             ClassRemovedField X = new ClassRemovedField();
             Integer Copy = X.removedField;
+        }
+    }");
+    
+    writeFile($TestsPath."/Test_RemovedAnnotation.java",
+    "import $PackageName.*;
+    public class Test_RemovedAnnotation {
+        public static void main(String[] args) {
+            testMethod();
+        }
+        
+        \@RemovedAnnotation
+        static void testMethod() {
         }
     }");
     
@@ -6410,7 +6478,7 @@ sub readClasses($$$)
                 }
             }
             if($Content[$LineNum]=~/flags:/i)
-            { # flags: ACC_PUBLIC, ACC_STATIC, ACC_FINAL
+            { # flags: ACC_PUBLIC, ACC_STATIC, ACC_FINAL, ACC_ANNOTATION
                 $LineNum++;
             }
             # read the Value
@@ -6476,8 +6544,13 @@ sub readClasses($$$)
                 elsif($TypeAttr{"Type"} eq "interface")
                 {
                     my @Elems = separate_Params($Extended, 0, 0);
-                    foreach my $SuperInterface (@Elems) {
+                    foreach my $SuperInterface (@Elems)
+                    {
                         $TypeAttr{"SuperInterface"}{registerType($SuperInterface, $LibVersion)} = 1;
+                        
+                        if($SuperInterface eq "java.lang.annotation.Annotation") {
+                            $TypeAttr{"Annotation"} = 1;
+                        }
                     }
                 }
             }
@@ -7452,15 +7525,26 @@ sub scenario()
             $AnnotationList_User{$Annotation} = 1;
         }
     }
-    if($SkipClasses)
+    if($SkipClassesList)
     {
-        if(not -f $SkipClasses) {
-            exitStatus("Access_Error", "can't access file \'$SkipClasses\'");
+        if(not -f $SkipClassesList) {
+            exitStatus("Access_Error", "can't access file \'$SkipClassesList\'");
         }
-        foreach my $Class (split(/\n/, readFile($SkipClasses)))
+        foreach my $Class (split(/\n/, readFile($SkipClassesList)))
         {
             $Class=~s/\//./g;
-            $SkipClass_User{$Class} = 1;
+            $SkipClasses{$Class} = 1;
+        }
+    }
+    if($SkipPackagesList)
+    {
+        if(not -f $SkipPackagesList) {
+            exitStatus("Access_Error", "can't access file \'$SkipPackagesList\'");
+        }
+        foreach my $Package (split(/\n/, readFile($SkipPackagesList)))
+        {
+            $SkipPackages{1}{$Package} = 1;
+            $SkipPackages{2}{$Package} = 1;
         }
     }
     if($ClientPath)
