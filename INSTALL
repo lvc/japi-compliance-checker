@@ -1,6 +1,6 @@
 
 Copyright (C) 2011 Institute for System Programming, RAS
-Copyright (C) 2011-2015 Andrey Ponomarenko's ABI Laboratory
+Copyright (C) 2011-2016 Andrey Ponomarenko's ABI Laboratory
 
 All rights reserved.
 
@@ -8,8 +8,8 @@ All rights reserved.
 RELEASE INFORMATION
 
 Project:           Java API Compliance Checker (Java ACC)
-Version:           1.4.3
-Date:              2015-11-20
+Version:           1.5
+Date:              2016-03-24
 
 
 This file explains how to install and setup environment
@@ -20,8 +20,8 @@ Content:
 
    1. Requirements for Linux, FreeBSD and Mac OS X
    2. Requirements for MS Windows
-   3. Configuring and Installing
-   4. Running the Tool
+   3. Configure and Install
+   4. Usage
    5. Advanced Usage
 
 
@@ -41,8 +41,8 @@ Content:
 
 
 
-3. CONFIGURING AND INSTALLING
-=============================
+3. CONFIGURE AND INSTALL
+========================
 
    This command will install an japi-compliance-checker program in the
    PREFIX/bin system directory:
@@ -55,15 +55,16 @@ Content:
 
 
 
-4. RUNNING THE TOOL
-===================
+4. USAGE
+========
 
    1. japi-compliance-checker OLD.jar NEW.jar
 
 
 
 5. ADVANCED USAGE
-===================
+=================
+
    1. Create XML-descriptors for two versions
       of a library (OLD.xml and NEW.xml):
             <version>
