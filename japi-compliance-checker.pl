@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 ###########################################################################
-# Java API Compliance Checker (Java APICC) 1.5
+# Java API Compliance Checker (Java APICC) 1.6
 # A tool for checking backward compatibility of a Java library API
 #
 # Written by Andrey Ponomarenko
@@ -44,7 +44,7 @@ use Cwd qw(abs_path cwd);
 use Data::Dumper;
 use Config;
 
-my $TOOL_VERSION = "1.5";
+my $TOOL_VERSION = "1.6";
 my $API_DUMP_VERSION = "2.0";
 my $API_DUMP_MAJOR = majorVersion($API_DUMP_VERSION);
 
@@ -643,9 +643,9 @@ my %LibArchives;
 my %Class_Methods;
 my %Class_AbstractMethods;
 my %Class_Fields;
-my %MethodInvoked;
-my %ClassMethod_AddedInvoked;
-my %FieldUsed;
+my %MethodUsed;
+my %ClassMethod_AddedUsed;
+# my %FieldUsed;
 
 #Annotations
 my %AnnotationList_User;
@@ -1243,7 +1243,7 @@ sub getProblemSeverity($$$$)
         if($Kind eq "Interface_Added_Abstract_Method"
         or $Kind eq "Abstract_Class_Added_Abstract_Method")
         {
-            if(not keys(%{$MethodInvoked{2}{$Target}}))
+            if(not keys(%{$MethodUsed{2}{$Target}}))
             {
                 if($Quick) {
                     return "Low";
@@ -1257,7 +1257,7 @@ sub getProblemSeverity($$$$)
         or $Kind eq "Abstract_Class_Added_Super_Interface"
         or $Kind eq "Abstract_Class_Added_Super_Abstract_Class")
         {
-            if(not keys(%{$ClassMethod_AddedInvoked{$TypeName}}))
+            if(not keys(%{$ClassMethod_AddedUsed{$TypeName}}))
             {
                 if($Quick) {
                     return "Low";
@@ -1411,7 +1411,7 @@ sub mergeTypes($$)
             if($Type1{"Abstract"})
             {
                 my $Add_Effect = "";
-                if(my @InvokedBy = sort keys(%{$MethodInvoked{2}{$AddedMethod}}))
+                if(my @InvokedBy = sort keys(%{$MethodUsed{2}{$AddedMethod}}))
                 {
                     my $MFirst = $InvokedBy[0];
                     $Add_Effect = " Added abstract method is called in 2nd library version by the method ".black_Name($MFirst, 1)." and may not be implemented by old clients.";
@@ -1433,7 +1433,7 @@ sub mergeTypes($$)
         else
         {
             my $Add_Effect = "";
-            if(my @InvokedBy = sort keys(%{$MethodInvoked{2}{$AddedMethod}}))
+            if(my @InvokedBy = sort keys(%{$MethodUsed{2}{$AddedMethod}}))
             {
                 my $MFirst = $InvokedBy[0];
                 $Add_Effect = " Added abstract method is called in 2nd library version by the method ".black_Name($MFirst, 1)." and may not be implemented by old clients.";
@@ -1479,12 +1479,12 @@ sub mergeTypes($$)
                 and keys(%{$Class_AbstractMethods{2}{$SuperClass2{"Name"}}}))
                 {
                     my $Add_Effect = "";
-                    if(my @Invoked = sort keys(%{$ClassMethod_AddedInvoked{$Type1{"Name"}}}))
+                    if(my @Invoked = sort keys(%{$ClassMethod_AddedUsed{$Type1{"Name"}}}))
                     {
                         my $MFirst = $Invoked[0];
                         my $MSignature = unmangle($MFirst);
                         $MSignature=~s/\A.+\.(\w+\()/$1/g; # short name
-                        my $InvokedBy = $ClassMethod_AddedInvoked{$Type1{"Name"}}{$MFirst};
+                        my $InvokedBy = $ClassMethod_AddedUsed{$Type1{"Name"}}{$MFirst};
                         $Add_Effect = " Abstract method ".black_Name_Str(htmlSpecChars($MSignature))." from the added abstract super-class is called by the method ".black_Name($InvokedBy, 2)." in 2nd library version and may not be implemented by old clients.";
                     }
                     %{$SubProblems{"Abstract_Class_Added_Super_Abstract_Class"}{""}} = (
@@ -1530,12 +1530,12 @@ sub mergeTypes($$)
                 or $SuperInterface=~/\Ajava\./)
                 {
                     my $Add_Effect = "";
-                    if(my @Invoked = sort keys(%{$ClassMethod_AddedInvoked{$Type1{"Name"}}}))
+                    if(my @Invoked = sort keys(%{$ClassMethod_AddedUsed{$Type1{"Name"}}}))
                     {
                         my $MFirst = $Invoked[0];
                         my $MSignature = unmangle($MFirst);
                         $MSignature=~s/\A.+\.(\w+\()/$1/g; # short name
-                        my $InvokedBy = $ClassMethod_AddedInvoked{$Type1{"Name"}}{$MFirst};
+                        my $InvokedBy = $ClassMethod_AddedUsed{$Type1{"Name"}}{$MFirst};
                         $Add_Effect = " Abstract method ".black_Name_Str(htmlSpecChars($MSignature))." from the added super-interface is called by the method ".black_Name($InvokedBy, 2)." in 2nd library version and may not be implemented by old clients.";
                     }
                     %{$SubProblems{"Interface_Added_Super_Interface"}{get_SFormat($SuperInterface)}} = (
@@ -1558,12 +1558,12 @@ sub mergeTypes($$)
                 if($Type1{"Abstract"} and $Type2{"Abstract"})
                 {
                     my $Add_Effect = "";
-                    if(my @Invoked = sort keys(%{$ClassMethod_AddedInvoked{$Type1{"Name"}}}))
+                    if(my @Invoked = sort keys(%{$ClassMethod_AddedUsed{$Type1{"Name"}}}))
                     {
                         my $MFirst = $Invoked[0];
                         my $MSignature = unmangle($MFirst);
                         $MSignature=~s/\A.+\.(\w+\()/$1/g; # short name
-                        my $InvokedBy = $ClassMethod_AddedInvoked{$Type1{"Name"}}{$MFirst};
+                        my $InvokedBy = $ClassMethod_AddedUsed{$Type1{"Name"}}{$MFirst};
                         $Add_Effect = " Abstract method ".black_Name_Str(htmlSpecChars($MSignature))." from the added super-interface is called by the method ".black_Name($InvokedBy, 2)." in 2nd library version and may not be implemented by old clients.";
                     }
                     %{$SubProblems{"Abstract_Class_Added_Super_Interface"}{get_SFormat($SuperInterface)}} = (
@@ -6389,40 +6389,21 @@ sub readClasses($$$)
         { # read Code
             if($InCode==1)
             {
-                if($LINE=~/\/\/\s*(Method|InterfaceMethod)\s+(.+)\Z/)
-                {
-                    my $InvokedName = $2;
-                    if($LibVersion==2)
+                if($LINE=~/ invoke(\w+) .* \/\/\s*(Method|InterfaceMethod)\s+(.+)\Z/)
+                { # 3:   invokevirtual   #2; //Method "[Lcom/sleepycat/je/Database#DbState;".clone:()Ljava/lang/Object;
+                    my ($InvokeType, $InvokedName) = ($1, $3);
+                    
+                    if($InvokedName!~/\A(\w+:|java\/(lang|util|io)\/)/
+                    and index($InvokedName, '"<init>":')!=0)
                     {
-                        if(defined $MethodInfo{1}{$CurrentMethod}) {
-                            $MethodInvoked{2}{$InvokedName}{$CurrentMethod} = 1;
-                        }
-                        if(index($LINE, " invokestatic ")==-1 and index($InvokedName, "<init>")==-1)
-                        {
-                            $InvokedName=~s/\A\"\[L(.+);"/$1/g;
-                            $InvokedName=~s/#/./g;
-                            # 3:   invokevirtual   #2; //Method "[Lcom/sleepycat/je/Database#DbState;".clone:()Ljava/lang/Object;
-                            if($InvokedName=~/\A(.+?)\./)
-                            {
-                                my $NClassName = $1;
-                                if($NClassName!~/\"/)
-                                {
-                                    $NClassName=~s!/!.!g;
-                                    $ClassMethod_AddedInvoked{$NClassName}{$InvokedName} = $CurrentMethod;
-                                }
-                            }
-                        }
-                    }
-                    else {
-                        $MethodInvoked{1}{$InvokedName}{$CurrentMethod} = 1;
+                        $MethodUsed{$LibVersion}{$InvokedName}{$CurrentMethod} = $InvokeType;
                     }
                 }
-                elsif($LibVersion==2 and defined $MethodInfo{1}{$CurrentMethod}
-                and $LINE=~/\/\/\s*Field\s+(.+)\Z/)
-                {
-                    my $UsedFieldName = $1;
-                    $FieldUsed{$UsedFieldName}{$CurrentMethod} = 1;
-                }
+                # elsif($LINE=~/ (getstatic|putstatic) .* \/\/\s*Field\s+(.+)\Z/)
+                # {
+                #     my $UsedFieldName = $2;
+                #     $FieldUsed{$LibVersion}{$UsedFieldName}{$CurrentMethod} = 1;
+                # }
             }
             else
             {
@@ -7008,36 +6989,43 @@ sub read_API_Dump($$)
     if($Content!~/};\s*\Z/) {
         exitStatus("Invalid_Dump", "specified API dump \'$Path\' is not valid, try to recreate it");
     }
-    my $LibraryAPI = eval($Content);
-    if(not $LibraryAPI) {
+    my $APIDump = eval($Content);
+    if(not $APIDump) {
         exitStatus("Error", "internal error - eval() procedure seem to not working correctly, try to remove 'use strict' and try again");
     }
-    my $DumpVersion = $LibraryAPI->{"API_DUMP_VERSION"};
+    my $DumpVersion = $APIDump->{"API_DUMP_VERSION"};
     if(majorVersion($DumpVersion) ne $API_DUMP_MAJOR)
     { # compatible with the dumps of the same major version
         exitStatus("Dump_Version", "incompatible version $DumpVersion of specified API dump (allowed only $API_DUMP_MAJOR.0<=V<=$API_DUMP_MAJOR.9)");
     }
-    $TypeInfo{$LibVersion} = $LibraryAPI->{"TypeInfo"};
+    $TypeInfo{$LibVersion} = $APIDump->{"TypeInfo"};
     foreach my $TypeId (keys(%{$TypeInfo{$LibVersion}}))
     {
         my %TypeAttr = %{$TypeInfo{$LibVersion}{$TypeId}};
-        $TName_Tid{$LibVersion}{$TypeAttr{"Name"}}=$TypeId;
+        $TName_Tid{$LibVersion}{$TypeAttr{"Name"}} = $TypeId;
         if(my $Archive = $TypeAttr{"Archive"}) {
-            $LibArchives{$LibVersion}{$Archive}=1;
+            $LibArchives{$LibVersion}{$Archive} = 1;
         }
         
         foreach my $FieldName (keys(%{$TypeAttr{"Fields"}}))
         {
             if($TypeAttr{"Fields"}{$FieldName}{"Access"}=~/public|protected/) {
-                $Class_Fields{$LibVersion}{$TypeAttr{"Name"}}{$FieldName}=$TypeAttr{"Fields"}{$FieldName}{"Type"};
+                $Class_Fields{$LibVersion}{$TypeAttr{"Name"}}{$FieldName} = $TypeAttr{"Fields"}{$FieldName}{"Type"};
             }
         }
     }
-    my $MInfo = $LibraryAPI->{"MethodInfo"};
+    my $MInfo = $APIDump->{"MethodInfo"};
     foreach my $M_Id (keys(%{$MInfo}))
     {
         my $Name = $MInfo->{$M_Id}{"Name"};
         $MethodInfo{$LibVersion}{$Name} = $MInfo->{$M_Id};
+    }
+    
+    my $MUsed = $APIDump->{"MethodUsed"};
+    foreach my $M_Id (keys(%{$MUsed}))
+    {
+        my $Name = $MUsed->{$M_Id}{"Name"};
+        $MethodUsed{$LibVersion}{$Name} = $MUsed->{$M_Id}{"Used"};
     }
     
     foreach my $Method (keys(%{$MethodInfo{$LibVersion}}))
@@ -7045,17 +7033,20 @@ sub read_API_Dump($$)
         if(my $ClassId = $MethodInfo{$LibVersion}{$Method}{"Class"}
         and $MethodInfo{$LibVersion}{$Method}{"Access"}=~/public|protected/)
         {
-            $Class_Methods{$LibVersion}{get_TypeName($ClassId, $LibVersion)}{$Method}=1;
+            $Class_Methods{$LibVersion}{get_TypeName($ClassId, $LibVersion)}{$Method} = 1;
             if($MethodInfo{$LibVersion}{$Method}{"Abstract"}) {
-                $Class_AbstractMethods{$LibVersion}{get_TypeName($ClassId, $LibVersion)}{$Method}=1;
+                $Class_AbstractMethods{$LibVersion}{get_TypeName($ClassId, $LibVersion)}{$Method} = 1;
             }
-            $LibClasses{$LibVersion}{get_ShortName($ClassId, $LibVersion)}=$MethodInfo{$LibVersion}{$Method}{"Package"};
+            $LibClasses{$LibVersion}{get_ShortName($ClassId, $LibVersion)} = $MethodInfo{$LibVersion}{$Method}{"Package"};
         }
     }
+    
+    # $FieldUsed{$LibVersion} = $APIDump->{"FieldUsed"};
+    
     if(keys(%{$LibArchives{$LibVersion}})) {
-        $Descriptor{$LibVersion}{"Archives"}="OK";
+        $Descriptor{$LibVersion}{"Archives"} = "OK";
     }
-    $Descriptor{$LibVersion}{"Version"} = $LibraryAPI->{"LibraryVersion"};
+    $Descriptor{$LibVersion}{"Version"} = $APIDump->{"LibraryVersion"};
     $Descriptor{$LibVersion}{"Dump"} = 1;
 }
 
@@ -7725,6 +7716,9 @@ sub scenario()
         
         printMsg("INFO", "creating library API dump ...");
         
+        
+        
+        
         my $MInfo = {};
         my $MNum = 0;
         foreach my $Method (sort keys(%{$MethodInfo{1}}))
@@ -7735,9 +7729,21 @@ sub scenario()
             $MNum+=1;
         }
         
+        my $MUsed = {};
+        $MNum = 0;
+        foreach my $Inv (sort keys(%{$MethodUsed{1}}))
+        {
+            $MUsed->{$MNum}{"Name"} = $Inv;
+            $MUsed->{$MNum}{"Used"} = $MethodUsed{1}{$Inv};
+            
+            $MNum+=1;
+        }
+        
         my %API = (
             "MethodInfo" => $MInfo,
             "TypeInfo" => $TypeInfo{1},
+            "MethodUsed" => $MUsed,
+            # "FieldUsed" => $FieldUsed{1},
             "LibraryVersion" => $Descriptor{1}{"Version"},
             "LibraryName" => $TargetLibraryName,
             "Language" => "Java",
@@ -7827,22 +7833,54 @@ sub scenario()
     and not $Descriptor{2}{"Dump"}) {
         readArchives(2);
     }
-    foreach my $ClassName (keys(%ClassMethod_AddedInvoked))
+    
+    foreach my $Inv (keys(%{$MethodUsed{2}}))
     {
-        foreach my $MethodName (keys(%{$ClassMethod_AddedInvoked{$ClassName}}))
+        foreach my $M (keys(%{$MethodUsed{2}{$Inv}}))
+        {
+            my $InvType = $MethodUsed{2}{$Inv}{$M};
+            
+            if($InvType ne "static"
+            and index($Inv, "<init>")==-1)
+            {
+                my $CName = $Inv;
+                $CName=~s/\A\"\[L(.+);"/$1/g;
+                $CName=~s/#/./g;
+                
+                if($CName=~/\A(.+?)\./)
+                {
+                    $CName = $1;
+                    if($CName!~/\"/)
+                    {
+                        $CName=~s!/!.!g;
+                        $ClassMethod_AddedUsed{$CName}{$Inv} = $M;
+                    }
+                }
+            }
+            
+            if(not defined $MethodInfo{1}{$M}) {
+                delete($MethodUsed{2}{$Inv}{$M});
+            }
+        }
+    }
+    
+    foreach my $ClassName (keys(%ClassMethod_AddedUsed))
+    {
+        foreach my $MethodName (keys(%{$ClassMethod_AddedUsed{$ClassName}}))
         {
             if(defined $MethodInfo{1}{$MethodName}
             or defined $MethodInfo{2}{$MethodName}
-            or defined $MethodInvoked{1}{$MethodName}
+            or defined $MethodUsed{1}{$MethodName}
             or findMethod($MethodName, 2, $ClassName, 1))
             { # abstract method added by the new super-class (abstract) or super-interface
-                delete($ClassMethod_AddedInvoked{$ClassName}{$MethodName});
+                delete($ClassMethod_AddedUsed{$ClassName}{$MethodName});
             }
         }
-        if(not keys(%{$ClassMethod_AddedInvoked{$ClassName}})) {
-            delete($ClassMethod_AddedInvoked{$ClassName});
+        if(not keys(%{$ClassMethod_AddedUsed{$ClassName}})) {
+            delete($ClassMethod_AddedUsed{$ClassName});
         }
     }
+    
     prepareMethods(1);
     prepareMethods(2);
     
