@@ -42,6 +42,7 @@ use File::Temp qw(tempdir);
 use File::Copy qw(copy);
 use Cwd qw(abs_path cwd);
 use Data::Dumper;
+use Digest::MD5 qw(md5_hex);
 use Config;
 
 my $TOOL_VERSION = "1.6";
@@ -55,13 +56,15 @@ $ShortMode, $KeepInternal, $OutputReportPath, $BinaryReportPath,
 $SourceReportPath, $Debug, $Quick, $SortDump, $SkipDeprecated, $SkipClassesList,
 $ShowAccess, $AffectLimit, $JdkPath, $SkipInternal, $HideTemplates,
 $HidePackages, $ShowPackages, $Minimal, $AnnotationsListPath,
-$SkipPackagesList, $OutputDumpPath, $AllAffected);
+$SkipPackagesList, $OutputDumpPath, $AllAffected, $Compact);
 
 my $CmdName = get_filename($0);
 my $OSgroup = get_OSgroup();
 my $ORIG_DIR = cwd();
 my $TMP_DIR = tempdir(CLEANUP=>1);
 my $ARG_MAX = get_ARG_MAX();
+my $REPRODUCIBLE = 1;
+my $MD5_LEN = 8;
 
 my %OS_Archive = (
     "windows"=>"zip",
@@ -162,6 +165,7 @@ GetOptions("h|help!" => \$Help,
   "limit-affected=s" => \$AffectLimit,
   "hide-templates!" => \$HideTemplates,
   "show-packages!" => \$ShowPackages,
+  "compact!" => \$Compact,
 # other options
   "test!" => \$TestSystem,
   "debug!" => \$Debug,
@@ -349,8 +353,8 @@ EXTRA OPTIONS:
       This option allows to specify a file with a list
       of packages that should not be checked.
       
-  -short PATH
-      Generate short report without 'Added Methods' section.
+  -short
+      Do not list added/removed methods.
   
   -dump-path PATH
       Specify a *.api.$AR_EXT or *.api file path where to generate an API dump.
@@ -399,6 +403,10 @@ EXTRA OPTIONS:
   -limit-affected LIMIT
       The maximum number of affected methods listed under the description
       of the changed type in the report.
+  
+  -compact
+      Try to simplify formatting and reduce size of the report (for a big
+      set of changes).
 
 OTHER OPTIONS:
   -test
@@ -628,7 +636,7 @@ my $JAVA_VERSION;
 
 #Types
 my %TypeInfo;
-my $TypeID = 0;
+my $TYPE_ID = 0;
 my %CheckedTypes;
 my %TName_Tid;
 my %Class_Constructed;
@@ -685,8 +693,8 @@ my %TypeProblemsIndex;
 
 #Rerort
 my $ContentID = 1;
-my $ContentSpanStart = "<span class=\"section\" onclick=\"showContent(this, 'CONTENT_ID')\">\n";
-my $ContentSpanStart_Affected = "<span class=\"section_affected\" onclick=\"showContent(this, 'CONTENT_ID')\">\n";
+my $ContentSpanStart = "<span class=\"section\" onclick=\"sC(this, 'CONTENT_ID')\">\n";
+my $ContentSpanStart_Affected = "<span class=\"sect_aff\" onclick=\"sC(this, 'CONTENT_ID')\">\n";
 my $ContentSpanEnd = "</span>\n";
 my $ContentDivStart = "<div id=\"CONTENT_ID\" style=\"display:none;\">\n";
 my $ContentDivEnd = "</div>\n";
@@ -2112,9 +2120,11 @@ sub findMethod($$$$)
 {
     my ($Method, $MethodVersion, $ClassName, $ClassVersion) = @_;
     my $ClassId = $TName_Tid{$ClassVersion}{$ClassName};
+    
     if(not $ClassId) {
         return "";
     }
+    
     my @Search = ();
     if(get_TypeType($ClassId, $ClassVersion) eq "class")
     {
@@ -2122,6 +2132,7 @@ sub findMethod($$$$)
             push(@Search, $SuperClassId);
         }
     }
+    
     if(not defined $MethodInfo{$MethodVersion}{$Method}
     or $MethodInfo{$MethodVersion}{$Method}{"Abstract"})
     {
@@ -2129,9 +2140,15 @@ sub findMethod($$$$)
             push(@Search, @SuperInterfaces);
         }
     }
+    
     foreach my $SuperId (@Search)
     {
+        if($SuperId eq $ClassId) {
+            next;
+        }
+        
         my $SuperName = get_TypeName($SuperId, $ClassVersion);
+        
         if(my $MethodInClass = findMethod_Class($Method, $SuperName, $ClassVersion)) {
             return $MethodInClass;
         }
@@ -2139,6 +2156,7 @@ sub findMethod($$$$)
             return $MethodInSuperClasses;
         }
     }
+    
     return "";
 }
 
@@ -2466,7 +2484,7 @@ sub black_Name_Str($$)
 sub highLight_Signature($$)
 {
     my ($M, $V) = @_;
-    return get_Signature($M, $V, "HTML|Italic");
+    return get_Signature($M, $V, "Class|HTML|Italic");
 }
 
 sub highLight_Signature_Italic_Color($$)
@@ -2483,14 +2501,17 @@ sub get_Signature($$$)
     }
     
     # settings
-    my ($Full, $Html, $Italic, $Color,
-    $ShowParams, $ShowClass, $ShowAttr, $Target) = (0, 0, 0, 0, 0, 0, 0, undef);
+    my ($Full, $Html, $Simple, $Italic, $Color,
+    $ShowParams, $ShowClass, $ShowAttr, $Target) = (0, 0, 0, 0, 0, 0, 0, 0, undef);
     
     if($Kind=~/Full/) {
         $Full = 1;
     }
     if($Kind=~/HTML/) {
         $Html = 1;
+    }
+    if($Kind=~/Simple/) {
+        $Simple = 1;
     }
     if($Kind=~/Italic/) {
         $Italic = 1;
@@ -2552,7 +2573,10 @@ sub get_Signature($$$)
                 {
                     my $PName = $MethodInfo{$LibVersion}{$Method}{"Param"}{$PPos}{"Name"};
                     
-                    if($Html)
+                    if($Simple) {
+                        $PName = "<i>$PName</i>";
+                    }
+                    elsif($Html)
                     {
                         my $Style = "param";
                         
@@ -2577,7 +2601,11 @@ sub get_Signature($$$)
         }
     }
     
-    if($Html)
+    if($Simple) {
+        $Signature = "<b>".$Signature."</b>";
+    }
+    
+    if($Html and not $Simple)
     {
         $Signature .= "&#160;";
         $Signature .= "<span class='sym_p'>";
@@ -2610,8 +2638,14 @@ sub get_Signature($$$)
         }
         $Signature .= "</span>";
     }
-    else {
-        $Signature .= "(".join(", ", @Params).")";
+    else
+    {
+        if(@Params) {
+            $Signature .= " ( ".join(", ", @Params)." )";
+        }
+        else {
+            $Signature .= " ( )";
+        }
     }
     
     if($Full or $ShowAttr)
@@ -2648,11 +2682,14 @@ sub get_Signature($$$)
                 $RName=~s/(\A|\<\s*|\,\s*)[a-z0-9\.]+\./$1/g;
             }
             
-            if($Html) {
+            if($Simple) {
+                $Signature .= " <b>:</b> ".htmlSpecChars($RName);
+            }
+            elsif($Html) {
                 $Signature .= "<span class='sym_p nowrap'> &#160;<b>:</b>&#160;&#160;".htmlSpecChars($RName)."</span>";
             }
             else {
-                $Signature .= " :".$RName;
+                $Signature .= " : ".$RName;
             }
         }
         
@@ -2668,24 +2705,33 @@ sub get_Signature($$$)
     
     if($Html)
     {
-        $Signature=~s!(\[static\]|\[abstract\]|\[public\]|\[private\]|\[protected\])!<span class='attr'>$1</span>!g;
-        
         if(not $SkipDeprecated) {
             $Signature=~s!(\*deprecated\*)!<span class='deprecated'>$1</span>!ig;
         }
         
+        $Signature=~s!(\[static\]|\[abstract\]|\[public\]|\[private\]|\[protected\])!<span class='attr'>$1</span>!g;
+    }
+    
+    if($Simple) {
+        $Signature=~s/\[\]/\[ \]/g;
+    }
+    elsif($Html)
+    {
         $Signature=~s!\[\]![&#160;]!g;
         $Signature=~s!operator=!operator&#160;=!g;
     }
     
-    $Cache{"get_Signature"}{$LibVersion}{$Method}{$Kind} = $Signature;
-    return $Cache{"get_Signature"}{$LibVersion}{$Method}{$Kind};
+    return ($Cache{"get_Signature"}{$LibVersion}{$Method}{$Kind} = $Signature);
 }
 
 sub checkJavaCompiler($)
 { # check javac: compile simple program
     my $Cmd = $_[0];
-    return if(not $Cmd);
+    
+    if(not $Cmd) {
+        return;
+    }
+    
     writeFile($TMP_DIR."/test_javac/Simple.java",
     "public class Simple {
         public Integer f;
@@ -3277,10 +3323,13 @@ sub get_Summary($)
     $Problem_Summary .= "<table cellpadding='3' cellspacing='0' class='summary'>";
     $Problem_Summary .= "<tr><th></th><th style='text-align:center;'>Severity</th><th style='text-align:center;'>Count</th></tr>";
     
-    if(not $ShortMode)
+    my $Added_Link = "0";
+    if($Added>0)
     {
-        my $Added_Link = "0";
-        if($Added>0)
+        if($ShortMode) {
+            $Added_Link = $Added;
+        }
+        else
         {
             if($JoinReport) {
                 $Added_Link = "<a href='#".$Level."_Added' style='color:Blue;'>$Added</a>";
@@ -3289,18 +3338,24 @@ sub get_Summary($)
                 $Added_Link = "<a href='#Added' style='color:Blue;'>$Added</a>";
             }
         }
-        $META_DATA .= "added:$Added;";
-        $Problem_Summary .= "<tr><th>Added Methods</th><td>-</td><td".getStyle("I", "A", $Added).">$Added_Link</td></tr>";
     }
+    $META_DATA .= "added:$Added;";
+    $Problem_Summary .= "<tr><th>Added Methods</th><td>-</td><td".getStyle("I", "A", $Added).">$Added_Link</td></tr>";
     
     my $Removed_Link = "0";
     if($Removed>0)
     {
-        if($JoinReport) {
-            $Removed_Link = "<a href='#".$Level."_Removed' style='color:Blue;'>$Removed</a>"
+        if($ShortMode) {
+            $Removed_Link = $Removed;
         }
-        else {
-            $Removed_Link = "<a href='#Removed' style='color:Blue;'>$Removed</a>"
+        else
+        {
+            if($JoinReport) {
+                $Removed_Link = "<a href='#".$Level."_Removed' style='color:Blue;'>$Removed</a>"
+            }
+            else {
+                $Removed_Link = "<a href='#Removed' style='color:Blue;'>$Removed</a>"
+            }
         }
     }
     $META_DATA .= "removed:$Removed;";
@@ -3398,7 +3453,10 @@ sub get_Anchor($$$)
 
 sub get_Report_Added($)
 {
-    return "" if($ShortMode);
+    if($ShortMode) {
+        return "";
+    }
+    
     my $Level = $_[0];
     my ($ADDED_METHODS, %MethodAddedInArchiveClass);
     foreach my $Method (sort keys(%CompatProblems))
@@ -3424,27 +3482,55 @@ sub get_Report_Added($)
     {
         foreach my $ClassName (sort {lc($a) cmp lc($b)} keys(%{$MethodAddedInArchiveClass{$ArchiveName}}))
         {
-            $ADDED_METHODS .= "<span class='jar'>$ArchiveName</span>, <span class='cname'>".htmlSpecChars($ClassName).".class</span><br/>\n";
             my %NameSpace_Method = ();
-            foreach my $Method (keys(%{$MethodAddedInArchiveClass{$ArchiveName}{$ClassName}}))
-            {
+            foreach my $Method (keys(%{$MethodAddedInArchiveClass{$ArchiveName}{$ClassName}})) {
                 $NameSpace_Method{$MethodInfo{2}{$Method}{"Package"}}{$Method} = 1;
             }
             foreach my $NameSpace (sort keys(%NameSpace_Method))
             {
-                $ADDED_METHODS .= ($NameSpace)?"<span class='package_title'>package</span> <span class='package'>$NameSpace</span><br/>\n":"";
+                $ADDED_METHODS .= "<span class='jar'>$ArchiveName</span>, <span class='cname'>".htmlSpecChars($ClassName).".class</span><br/>\n";
+                
+                if($NameSpace) {
+                    $ADDED_METHODS .= "<span class='package_title'>package</span> <span class='package'>$NameSpace</span><br/>\n";
+                }
+                
+                if($Compact) {
+                    $ADDED_METHODS .= "<div class='symbols'>";
+                }
+                
                 my @SortedMethods = sort {lc($MethodInfo{2}{$a}{"Signature"}) cmp lc($MethodInfo{2}{$b}{"Signature"})} keys(%{$NameSpace_Method{$NameSpace}});
                 foreach my $Method (@SortedMethods)
                 {
                     $Added_Number += 1;
-                    my $Signature = highLight_Signature_Italic_Color($Method, 2);
+                    
+                    my $Signature = undef;
+                    
+                    if($Compact) {
+                        $Signature = get_Signature($Method, 2, "Full|HTML|Simple");
+                    }
+                    else {
+                        $Signature = highLight_Signature_Italic_Color($Method, 2);
+                    }
+                    
                     if($NameSpace) {
                         $Signature=~s/(\W|\A)\Q$NameSpace\E\.(\w)/$1$2/g;
                     }
-                    $ADDED_METHODS .= insertIDs($ContentSpanStart.$Signature.$ContentSpanEnd."<br/>\n".$ContentDivStart."<span class='mangled'>[mangled: <b>".htmlSpecChars($Method)."</b>]</span><br/><br/>".$ContentDivEnd."\n");
+                    
+                    if($Compact) {
+                        $ADDED_METHODS .= "&nbsp;".$Signature."<br/>\n";
+                    }
+                    else {
+                        $ADDED_METHODS .= insertIDs($ContentSpanStart.$Signature.$ContentSpanEnd."<br/>\n".$ContentDivStart."<span class='mngl'>[mangled: <b>".htmlSpecChars($Method)."</b>]</span><br/><br/>".$ContentDivEnd."\n");
+                    }
                 }
+                
+                if($Compact) {
+                    $ADDED_METHODS .= "</div>";
+                }
+                
+                $ADDED_METHODS .= "<br/>\n";
             }
-            $ADDED_METHODS .= "<br/>\n";
+            
         }
     }
     if($ADDED_METHODS)
@@ -3460,6 +3546,10 @@ sub get_Report_Added($)
 
 sub get_Report_Removed($)
 {
+    if($ShortMode) {
+        return "";
+    }
+    
     my $Level = $_[0];
     my ($REMOVED_METHODS, %MethodRemovedFromArchiveClass);
     foreach my $Method (sort keys(%CompatProblems))
@@ -3485,7 +3575,6 @@ sub get_Report_Removed($)
     {
         foreach my $ClassName (sort {lc($a) cmp lc($b)} keys(%{$MethodRemovedFromArchiveClass{$ArchiveName}}))
         {
-            $REMOVED_METHODS .= "<span class='jar'>$ArchiveName</span>, <span class='cname'>".htmlSpecChars($ClassName).".class</span><br/>\n";
             my %NameSpace_Method = ();
             foreach my $Method (keys(%{$MethodRemovedFromArchiveClass{$ArchiveName}{$ClassName}}))
             {
@@ -3493,19 +3582,48 @@ sub get_Report_Removed($)
             }
             foreach my $NameSpace (sort keys(%NameSpace_Method))
             {
-                $REMOVED_METHODS .= ($NameSpace)?"<span class='package_title'>package</span> <span class='package'>$NameSpace</span><br/>\n":"";
+                $REMOVED_METHODS .= "<span class='jar'>$ArchiveName</span>, <span class='cname'>".htmlSpecChars($ClassName).".class</span><br/>\n";
+                
+                if($NameSpace) {
+                    $REMOVED_METHODS .= "<span class='package_title'>package</span> <span class='package'>$NameSpace</span><br/>\n";
+                }
+                
+                if($Compact) {
+                    $REMOVED_METHODS .= "<div class='symbols'>";
+                }
+                
                 my @SortedMethods = sort {lc($MethodInfo{1}{$a}{"Signature"}) cmp lc($MethodInfo{1}{$b}{"Signature"})} keys(%{$NameSpace_Method{$NameSpace}});
                 foreach my $Method (@SortedMethods)
                 {
                     $Removed_Number += 1;
-                    my $Signature = highLight_Signature_Italic_Color($Method, 1);
+                    
+                    my $Signature = undef;
+                    
+                    if($Compact) {
+                        $Signature = get_Signature($Method, 1, "Full|HTML|Simple");
+                    }
+                    else {
+                        $Signature = highLight_Signature_Italic_Color($Method, 1);
+                    }
+                    
                     if($NameSpace) {
                         $Signature=~s/(\W|\A)\Q$NameSpace\E\.(\w)/$1$2/g;
                     }
-                    $REMOVED_METHODS .= insertIDs($ContentSpanStart.$Signature.$ContentSpanEnd."<br/>\n".$ContentDivStart."<span class='mangled'>[mangled: <b>".htmlSpecChars($Method)."</b>]</span><br/><br/>".$ContentDivEnd."\n");
+                    
+                    if($Compact) {
+                        $REMOVED_METHODS .= "&nbsp;".$Signature."<br/>\n";
+                    }
+                    else {
+                        $REMOVED_METHODS .= insertIDs($ContentSpanStart.$Signature.$ContentSpanEnd."<br/>\n".$ContentDivStart."<span class='mngl'>[mangled: <b>".htmlSpecChars($Method)."</b>]</span><br/><br/>".$ContentDivEnd."\n");
+                    }
                 }
+                
+                if($Compact) {
+                    $REMOVED_METHODS .= "</div>";
+                }
+                
+                $REMOVED_METHODS .= "<br/>\n";
             }
-            $REMOVED_METHODS .= "<br/>\n";
         }
     }
     if($REMOVED_METHODS)
@@ -3522,10 +3640,11 @@ sub get_Report_Removed($)
 sub get_Report_MethodProblems($$)
 {
     my ($TargetSeverity, $Level) = @_;
-    my ($METHOD_PROBLEMS, %MethodInArchiveClass);
+    my $METHOD_PROBLEMS = "";
+    my (%ReportMap, %MethodChanges) = ();
+    
     foreach my $Method (sort keys(%CompatProblems))
     {
-        next if($Method=~/\A([^\@\$\?]+)[\@\$]+/ and defined $CompatProblems{$1});
         foreach my $Kind (sort keys(%{$CompatProblems{$Method}}))
         {
             if($MethodProblems_Kind{$Level}{$Kind}
@@ -3533,23 +3652,38 @@ sub get_Report_MethodProblems($$)
             {
                 my $ArchiveName = $MethodInfo{1}{$Method}{"Archive"};
                 my $ClassName = get_ShortName($MethodInfo{1}{$Method}{"Class"}, 1);
-                $MethodInArchiveClass{$ArchiveName}{$ClassName}{$Method} = 1;
+                
+                foreach my $Location (sort keys(%{$CompatProblems{$Method}{$Kind}}))
+                {
+                    my $Type_Name = $CompatProblems{$Method}{$Kind}{$Location}{"Type_Name"};
+                    my $Target = $CompatProblems{$Method}{$Kind}{$Location}{"Target"};
+                    my $Severity = getProblemSeverity($Level, $Kind, $Type_Name, $Target);
+                    
+                    if($Severity eq $TargetSeverity)
+                    {
+                        $MethodChanges{$Method}{$Kind} = $CompatProblems{$Method}{$Kind};
+                        $ReportMap{$ArchiveName}{$ClassName}{$Method} = 1;
+                    }
+                }
             }
         }
     }
     my $Problems_Number = 0;
-    foreach my $ArchiveName (sort {lc($a) cmp lc($b)} keys(%MethodInArchiveClass))
+    foreach my $ArchiveName (sort {lc($a) cmp lc($b)} keys(%ReportMap))
     {
-        foreach my $ClassName (sort {lc($a) cmp lc($b)} keys(%{$MethodInArchiveClass{$ArchiveName}}))
+        foreach my $ClassName (sort {lc($a) cmp lc($b)} keys(%{$ReportMap{$ArchiveName}}))
         {
-            my ($ARCHIVE_CLASS_REPORT, %NameSpace_Method) = ();
-            foreach my $Method (keys(%{$MethodInArchiveClass{$ArchiveName}{$ClassName}}))
-            {
+            my %NameSpace_Method = ();
+            foreach my $Method (keys(%{$ReportMap{$ArchiveName}{$ClassName}})) {
                 $NameSpace_Method{$MethodInfo{1}{$Method}{"Package"}}{$Method} = 1;
             }
             foreach my $NameSpace (sort keys(%NameSpace_Method))
             {
-                my $NAMESPACE_REPORT = "";
+                $METHOD_PROBLEMS .= "<span class='jar'>$ArchiveName</span>, <span class='cname'>$ClassName.class</span><br/>\n";
+                if($NameSpace) {
+                    $METHOD_PROBLEMS .= "<span class='package_title'>package</span> <span class='package'>$NameSpace</span><br/>\n";
+                }
+                
                 my @SortedMethods = sort {lc($MethodInfo{1}{$a}{"Signature"}) cmp lc($MethodInfo{1}{$b}{"Signature"})} keys(%{$NameSpace_Method{$NameSpace}});
                 foreach my $Method (@SortedMethods)
                 {
@@ -3557,17 +3691,14 @@ sub get_Report_MethodProblems($$)
                     my $ClassName_Full = get_TypeName($MethodInfo{1}{$Method}{"Class"}, 1);
                     my $MethodProblemsReport = "";
                     my $ProblemNum = 1;
-                    foreach my $Kind (sort keys(%{$CompatProblems{$Method}}))
+                    foreach my $Kind (sort keys(%{$MethodChanges{$Method}}))
                     {
-                        foreach my $Location (sort keys(%{$CompatProblems{$Method}{$Kind}}))
+                        foreach my $Location (sort keys(%{$MethodChanges{$Method}{$Kind}}))
                         {
-                            my %Problems = %{$CompatProblems{$Method}{$Kind}{$Location}};
-                            my $Type_Name = $Problems{"Type_Name"};
+                            my %Problems = %{$MethodChanges{$Method}{$Kind}{$Location}};
+                            
                             my $Target = $Problems{"Target"};
-                            my $Priority = getProblemSeverity($Level, $Kind, $Type_Name, $Target);
-                            if($Priority ne $TargetSeverity) {
-                                next;
-                            }
+                            
                             my ($Change, $Effect) = ("", "");
                             my $Old_Value = htmlSpecChars($Problems{"Old_Value"});
                             my $New_Value = htmlSpecChars($Problems{"New_Value"});
@@ -3684,7 +3815,7 @@ sub get_Report_MethodProblems($$)
                             }
                             if($Change)
                             {
-                                $MethodProblemsReport .= "<tr><th align='center'>$ProblemNum</th><td align='left' valign='top'>".$Change."</td><td align='left' valign='top'>".$Effect."</td></tr>\n";
+                                $MethodProblemsReport .= "<tr><th>$ProblemNum</th><td>".$Change."</td><td>".$Effect."</td></tr>\n";
                                 $ProblemNum += 1;
                                 $Problems_Number += 1;
                             }
@@ -3693,25 +3824,30 @@ sub get_Report_MethodProblems($$)
                     $ProblemNum -= 1;
                     if($MethodProblemsReport)
                     {
-                        $NAMESPACE_REPORT .= $ContentSpanStart."<span class='extendable'>[+]</span> ".highLight_Signature_Italic_Color($Method, 1)." ($ProblemNum)".$ContentSpanEnd."<br/>\n$ContentDivStart<span class='mangled'>&#160;&#160;&#160;[mangled: <b>".htmlSpecChars($Method)."</b>]</span><br/>\n";
-                        if($NameSpace) {
-                            $NAMESPACE_REPORT=~s/(\W|\A)\Q$NameSpace\E\.(\w)/$1$2/g;
+                        my $ShowMethod = highLight_Signature_Italic_Color($Method, 1);
+                        $MethodProblemsReport = cut_Namespace($MethodProblemsReport, $NameSpace);
+                        $ShowMethod = cut_Namespace($ShowMethod, $NameSpace);
+                        
+                        $METHOD_PROBLEMS .= $ContentSpanStart."<span class='ext'>[+]</span> ".$ShowMethod." ($ProblemNum)".$ContentSpanEnd."<br/>\n";
+                        $METHOD_PROBLEMS .= $ContentDivStart;
+                        
+                        if(not $Compact) {
+                            $METHOD_PROBLEMS .= "<span class='mngl'>&#160;&#160;&#160;[mangled: <b>".htmlSpecChars($Method)."</b>]</span><br/>\n";
                         }
-                        $NAMESPACE_REPORT .= "<table class='ptable'><tr><th width='2%'></th><th width='47%'>Change</th><th>Effect</th></tr>$MethodProblemsReport</table><br/>$ContentDivEnd\n";
-                        $NAMESPACE_REPORT = insertIDs($NAMESPACE_REPORT);
+                        
+                        $METHOD_PROBLEMS .= "<table class='ptable'><tr><th width='2%'></th><th width='47%'>Change</th><th>Effect</th></tr>$MethodProblemsReport</table><br/>$ContentDivEnd\n";
+                        
                     }
                 }
-                if($NAMESPACE_REPORT) {
-                    $ARCHIVE_CLASS_REPORT .= (($NameSpace)?"<span class='package_title'>package</span> <span class='package'>$NameSpace</span>"."<br/>\n":"").$NAMESPACE_REPORT;
-                }
-            }
-            if($ARCHIVE_CLASS_REPORT) {
-                $METHOD_PROBLEMS .= "<span class='jar'>$ArchiveName</span>, <span class='cname'>$ClassName.class</span><br/>\n".$ARCHIVE_CLASS_REPORT."<br/>";
+                
+                $METHOD_PROBLEMS .= "<br/>";
             }
         }
     }
     if($METHOD_PROBLEMS)
     {
+        $METHOD_PROBLEMS = insertIDs($METHOD_PROBLEMS);
+        
         my $Title = "Problems with Methods, $TargetSeverity Severity";
         if($TargetSeverity eq "Safe")
         { # Safe Changes
@@ -3725,50 +3861,65 @@ sub get_Report_MethodProblems($$)
 sub get_Report_TypeProblems($$)
 {
     my ($TargetSeverity, $Level) = @_;
-    my ($TYPE_PROBLEMS, %TypeArchive) = ();
+    my $TYPE_PROBLEMS = "";
+    my %ReportMap = ();
+    my %TypeChanges_Sev = ();
     
     foreach my $TypeName (keys(%{$TypeChanges{$Level}}))
     {
         my $ArchiveName = $TypeInfo{1}{$TName_Tid{1}{$TypeName}}{"Archive"};
-        $TypeArchive{$ArchiveName}{$TypeName} = 1;
+        
+        foreach my $Kind (keys(%{$TypeChanges{$Level}{$TypeName}}))
+        {
+            foreach my $Location (keys(%{$TypeChanges{$Level}{$TypeName}{$Kind}}))
+            {
+                my $Target = $TypeChanges{$Level}{$TypeName}{$Kind}{$Location}{"Target"};
+                my $Severity = getProblemSeverity($Level, $Kind, $TypeName, $Target);
+                
+                if($Severity eq $TargetSeverity)
+                {
+                    $ReportMap{$ArchiveName}{$TypeName} = 1;
+                    $TypeChanges_Sev{$TypeName}{$Kind}{$Location} = $TypeChanges{$Level}{$TypeName}{$Kind}{$Location};
+                }
+            }
+        }
     }
     
     my $Problems_Number = 0;
-    foreach my $ArchiveName (sort {lc($a) cmp lc($b)} keys(%TypeArchive))
+    foreach my $ArchiveName (sort {lc($a) cmp lc($b)} keys(%ReportMap))
     {
         my ($HEADER_REPORT, %NameSpace_Type) = ();
-        foreach my $TypeName (keys(%{$TypeArchive{$ArchiveName}}))
+        foreach my $TypeName (keys(%{$ReportMap{$ArchiveName}}))
         {
             $NameSpace_Type{$TypeInfo{1}{$TName_Tid{1}{$TypeName}}{"Package"}}{$TypeName} = 1;
         }
         foreach my $NameSpace (sort keys(%NameSpace_Type))
         {
-            my $NAMESPACE_REPORT = "";
+            $TYPE_PROBLEMS .= "<span class='jar'>$ArchiveName</span><br/>\n";
+            if($NameSpace) {
+                $TYPE_PROBLEMS .= "<span class='package_title'>package</span> <span class='package'>".$NameSpace."</span><br/>\n";
+            }
+            
             my @SortedTypes = sort {lc($a) cmp lc($b)} keys(%{$NameSpace_Type{$NameSpace}});
             foreach my $TypeName (@SortedTypes)
             {
                 my $TypeId = $TName_Tid{1}{$TypeName};
                 my $ProblemNum = 1;
                 my ($TypeProblemsReport, %Kinds_Locations, %Kinds_Target) = ();
-                foreach my $Kind (sort keys(%{$TypeChanges{$Level}{$TypeName}}))
+                foreach my $Kind (sort keys(%{$TypeChanges_Sev{$TypeName}}))
                 {
-                    foreach my $Location (sort keys(%{$TypeChanges{$Level}{$TypeName}{$Kind}}))
+                    foreach my $Location (sort keys(%{$TypeChanges_Sev{$TypeName}{$Kind}}))
                     {
-                        my $Target = $TypeChanges{$Level}{$TypeName}{$Kind}{$Location}{"Target"};
-                        my $Severity = getProblemSeverity($Level, $Kind, $TypeName, $Target);
-                        
-                        if($Severity ne $TargetSeverity) {
-                            next;
-                        }
-                        
                         $Kinds_Locations{$Kind}{$Location} = 1;
-                        my ($Change, $Effect) = ("", "");
-                        my %Problems = %{$TypeChanges{$Level}{$TypeName}{$Kind}{$Location}};
                         
+                        my $Target = $TypeChanges_Sev{$TypeName}{$Kind}{$Location}{"Target"};
                         if($Kinds_Target{$Kind}{$Target}) {
                             next;
                         }
                         $Kinds_Target{$Kind}{$Target} = 1;
+                        
+                        my ($Change, $Effect) = ("", "");
+                        my %Problems = %{$TypeChanges_Sev{$TypeName}{$Kind}{$Location}};
                         
                         my $Old_Value = $Problems{"Old_Value"};
                         my $New_Value = $Problems{"New_Value"};
@@ -3776,6 +3927,7 @@ sub get_Report_TypeProblems($$)
                         my $Field_Value = $Problems{"Field_Value"};
                         my $Type_Type = $Problems{"Type_Type"};
                         my $Add_Effect = $Problems{"Add_Effect"};
+                        
                         if($Kind eq "NonAbstract_Class_Added_Abstract_Method")
                         {
                             my $ShortSignature = get_Signature($Target, 2, "Short");
@@ -4172,49 +4324,43 @@ sub get_Report_TypeProblems($$)
                         }
                         if($Change)
                         {
-                            $TypeProblemsReport .= "<tr><th align='center' valign='top'>$ProblemNum</th><td align='left' valign='top'>".$Change."</td><td align='left' valign='top'>".$Effect."</td></tr>\n";
+                            $TypeProblemsReport .= "<tr><th>$ProblemNum</th><td>".$Change."</td><td>".$Effect."</td></tr>\n";
                             $ProblemNum += 1;
                             $Problems_Number += 1;
                             $Kinds_Locations{$Kind}{$Location} = 1;
                         }
                     }
                 }
-                $ProblemNum -= 1;
+                
                 if($TypeProblemsReport)
                 {
                     my $Affected = "";
-                    
                     if(not defined $TypeInfo{1}{$TypeId}{"Annotation"}) {
                         $Affected = getAffectedMethods($Level, $TypeName, \%Kinds_Locations);
                     }
                     
-                    $NAMESPACE_REPORT .= $ContentSpanStart."<span class='extendable'>[+]</span> ".htmlSpecChars($TypeName)." ($ProblemNum)".$ContentSpanEnd."<br/>\n";
-                    $NAMESPACE_REPORT .= $ContentDivStart."<table class='ptable'><tr>";
-                    $NAMESPACE_REPORT .= "<th width='2%'></th><th width='47%'>Change</th><th>Effect</th>";
-                    $NAMESPACE_REPORT .= "</tr>$TypeProblemsReport</table>".$Affected."<br/><br/>$ContentDivEnd\n";
-                    $NAMESPACE_REPORT = insertIDs($NAMESPACE_REPORT);
-                    if($NameSpace) {
-                        $NAMESPACE_REPORT=~s/(\W|\A)\Q$NameSpace\E\.(\w)/$1$2/g;
+                    my $ShowType = $TypeName;
+                    if($NameSpace)
+                    {
+                        $TypeProblemsReport = cut_Namespace($TypeProblemsReport, $NameSpace);
+                        $ShowType = cut_Namespace($ShowType, $NameSpace);
+                        $Affected = cut_Namespace($Affected, $NameSpace);
                     }
+                    
+                    $TYPE_PROBLEMS .= $ContentSpanStart."<span class='ext'>[+]</span> ".htmlSpecChars($ShowType)." (".($ProblemNum-1).")".$ContentSpanEnd."<br/>\n";
+                    $TYPE_PROBLEMS .= $ContentDivStart."<table class='ptable'><tr>";
+                    $TYPE_PROBLEMS .= "<th width='2%'></th><th width='47%'>Change</th><th>Effect</th>";
+                    $TYPE_PROBLEMS .= "</tr>$TypeProblemsReport</table>".$Affected."<br/><br/>$ContentDivEnd\n";
                 }
             }
-            if($NAMESPACE_REPORT)
-            {
-                if($NameSpace) {
-                    $NAMESPACE_REPORT = "<span class='package_title'>package</span> <span class='package'>".$NameSpace."</span><br/>\n".$NAMESPACE_REPORT
-                }
-                if($HEADER_REPORT) {
-                    $NAMESPACE_REPORT = "<br/>".$NAMESPACE_REPORT;
-                }
-                $HEADER_REPORT .= $NAMESPACE_REPORT;
-            }
-        }
-        if($HEADER_REPORT) {
-            $TYPE_PROBLEMS .= "<span class='jar'>$ArchiveName</span><br/>\n".$HEADER_REPORT."<br/>";
+            
+            $TYPE_PROBLEMS .= "<br/>";
         }
     }
     if($TYPE_PROBLEMS)
     {
+        $TYPE_PROBLEMS = insertIDs($TYPE_PROBLEMS);
+        
         my $Title = "Problems with Data Types, $TargetSeverity Severity";
         if($TargetSeverity eq "Safe")
         { # Safe Changes
@@ -4225,17 +4371,19 @@ sub get_Report_TypeProblems($$)
     return $TYPE_PROBLEMS;
 }
 
+sub cut_Namespace($$)
+{
+    my ($N, $Ns) = @_;
+    $N=~s/(\W|\A)\Q$Ns\E\.(\w)/$1$2/g;
+    return $N;
+}
+
 sub getAffectedMethods($$$)
 {
     my ($Level, $Target_TypeName, $Kinds_Locations) = @_;
     
     my $LIMIT = 10;
     if(defined $AffectLimit) {
-        $LIMIT = $AffectLimit;
-    }
-    elsif(defined $ShortMode)
-    {
-        $AffectLimit = 10;
         $LIMIT = $AffectLimit;
     }
     
@@ -4511,6 +4659,12 @@ sub getReport($)
         font-size:1.25em;
         white-space:nowrap;
     }
+    div.symbols {
+        color:#003E69;
+    }
+    div.symbols i {
+        color:Brown;
+    }
     span.section {
         font-weight:bold;
         cursor:pointer;
@@ -4521,14 +4675,14 @@ sub getReport($)
     span:hover.section {
         color:#336699;
     }
-    span.section_affected {
+    span.sect_aff {
         cursor:pointer;
         margin-left:7px;
         padding-left:15px;
         font-size:0.875em;
         color:#cc3300;
     }
-    span.extendable {
+    span.ext {
         font-weight:100;
     }
     span.jar {
@@ -4610,6 +4764,8 @@ sub getReport($)
         border:1px solid Gray;
         padding: 3px;
         font-size:0.875em;
+        text-align:left;
+        vertical-align:top;
     }
     table.ptable th {
         background-color:#eeeeee;
@@ -4642,7 +4798,7 @@ sub getReport($)
         border:1px inset gray;
         padding: 3px 5px 3px 10px;
     }
-    span.mangled {
+    span.mngl {
         padding-left:15px;
         font-size:0.875em;
         cursor:text;
@@ -4693,7 +4849,7 @@ sub getReport($)
     }";
     
     my $JScripts = "
-    function showContent(header, id)
+    function sC(header, id)
     {
         e = document.getElementById(id);
         if(e.style.display == 'none')
@@ -4936,7 +5092,8 @@ sub readArchives($)
         exitStatus("Error", "Java ARchives are not found in ".$Descriptor{$LibVersion}{"Version"});
     }
     printMsg("INFO", "reading classes ".$Descriptor{$LibVersion}{"Version"}." ...");
-    $TypeID = 0;
+    $TYPE_ID = 0;
+    
     foreach my $ArchivePath (sort {length($a)<=>length($b)} @ArchivePaths) {
         readArchive($LibVersion, $ArchivePath);
     }
@@ -6195,17 +6352,28 @@ sub divideArray($)
 sub registerType($$)
 {
     my ($TName, $LibVersion) = @_;
-    return 0 if(not $TName);
+    
+    if(not $TName) {
+        return 0;
+    }
+    
     $TName=~s/#/./g;
     if($TName_Tid{$LibVersion}{$TName}) {
         return $TName_Tid{$LibVersion}{$TName};
     }
+    
     if(not $TName_Tid{$LibVersion}{$TName})
     {
-        if(my $ID = ++$TypeID) {
-            $TName_Tid{$LibVersion}{$TName} = "$ID";
+        my $ID = undef;
+        if($REPRODUCIBLE) {
+            $ID = getMd5($TName);
         }
+        else {
+            $ID = ++$TYPE_ID;
+        }
+        $TName_Tid{$LibVersion}{$TName} = "$ID";
     }
+    
     my $Tid = $TName_Tid{$LibVersion}{$TName};
     $TypeInfo{$LibVersion}{$Tid}{"Name"} = $TName;
     if($TName=~/(.+)\[\]\Z/)
@@ -6216,6 +6384,7 @@ sub registerType($$)
             $TypeInfo{$LibVersion}{$Tid}{"Type"} = "array";
         }
     }
+    
     return $Tid;
 }
 
@@ -6326,12 +6495,37 @@ sub readClasses($$$)
     while($LineNum<=$#Content)
     {
         my $LINE = $Content[$LineNum++];
+        my $LINE_N = $Content[$LineNum];
         
-        next if($LINE=~/\A\s*(?:const|AnnotationDefault|Compiled|Source|Constant)/);
-        next if($LINE=~/\sof\s|\sline \d+:|\[\s*class|= \[| \$|\$\d| class\$/);
+        if($LINE=~/\A\s*(?:const|AnnotationDefault|Compiled|Source|Constant)/) {
+            next;
+        }
+        
+        if($LINE=~/\sof\s|\sline \d+:|\[\s*class|= \[|\$[\d\$\(:\.;]| class\$|[\.\/]\$|\._\d|\$eq/)
+        { # artificial methods and code
+            next;
+        }
+        
+        if($LINE=~/ (\w+\$|)\w+\$\w+[\(:]/) {
+            next;
+        }
+        
+        if(not $InParamTable)
+        {
+            if($LINE=~/ \$/) {
+                next;
+            }
+        }
+        
+        $LINE=~s/\$([\> ]|\Z)/$1/g;
+        $LINE_N=~s/\$([\> ]|\Z)/$1/g;
+        
+        if($LINE eq "\n" or $LINE eq "}\n") {
+            $CurrentMethod = undef;
+        }
         
         if($LINE=~/\A\s*#(\d+)/)
-        { # Contant pool
+        { # Constant pool
             my $CNum = $1;
             if(defined $AnnotationNums{$CNum})
             {
@@ -6354,15 +6548,15 @@ sub readClasses($$$)
         if(index($LINE, "<")!=-1)
         { # <T extends java.lang.Object>
           # <KEYIN extends java.lang.Object ...
-            if($LINE=~/<[A-Z\d\?]+ /)
+            if($LINE=~/<[A-Z\d\?]+ /i)
             {
-                while($LINE=~/<([A-Z\d\?]+ .*?)>( |\Z)/)
+                while($LINE=~/<([A-Z\d\?]+ .*?)>( |\Z)/i)
                 {
                     my $Str = $1;
                     my @Prms = ();
                     foreach my $P (separate_Params($Str, 0, 0))
                     {
-                        $P=~s/\A([A-Z\d\?]+) .*\Z/$1/g;
+                        $P=~s/\A([A-Z\d\?]+) .*\Z/$1/ig;
                         push(@Prms, $P);
                     }
                     my $Str_N = join(", ", @Prms);
@@ -6389,21 +6583,28 @@ sub readClasses($$$)
         { # read Code
             if($InCode==1)
             {
-                if($LINE=~/ invoke(\w+) .* \/\/\s*(Method|InterfaceMethod)\s+(.+)\Z/)
-                { # 3:   invokevirtual   #2; //Method "[Lcom/sleepycat/je/Database#DbState;".clone:()Ljava/lang/Object;
-                    my ($InvokeType, $InvokedName) = ($1, $3);
-                    
-                    if($InvokedName!~/\A(\w+:|java\/(lang|util|io)\/)/
-                    and index($InvokedName, '"<init>":')!=0)
+                if($CurrentMethod)
+                {
+                    if(index($LINE, "invoke")!=-1)
                     {
-                        $MethodUsed{$LibVersion}{$InvokedName}{$CurrentMethod} = $InvokeType;
+                        if($LINE=~/ invoke(\w+) .* \/\/\s*(Method|InterfaceMethod)\s+(.+)\Z/)
+                        { # 3:   invokevirtual   #2; //Method "[Lcom/sleepycat/je/Database#DbState;".clone:()Ljava/lang/Object;
+                            my ($InvokeType, $InvokedName) = ($1, $3);
+                            
+                            if($InvokedName!~/\A(\w+:|java\/(lang|util|io)\/)/
+                            and index($InvokedName, '"<init>":')!=0)
+                            {
+                                $InvokedName=~s/#/\$/g;
+                                $MethodUsed{$LibVersion}{$InvokedName}{$CurrentMethod} = $InvokeType;
+                            }
+                        }
                     }
+                    # elsif($LINE=~/ (getstatic|putstatic) .* \/\/\s*Field\s+(.+)\Z/)
+                    # {
+                    #     my $UsedFieldName = $2;
+                    #     $FieldUsed{$LibVersion}{$UsedFieldName}{$CurrentMethod} = 1;
+                    # }
                 }
-                # elsif($LINE=~/ (getstatic|putstatic) .* \/\/\s*Field\s+(.+)\Z/)
-                # {
-                #     my $UsedFieldName = $2;
-                #     $FieldUsed{$LibVersion}{$UsedFieldName}{$CurrentMethod} = 1;
-                # }
             }
             else
             {
@@ -6412,10 +6613,12 @@ sub readClasses($$$)
                 }
             }
         }
-        elsif($CurrentMethod and $InParamTable==1 and $LINE=~/\A\s+0\s+\d+\s+\d+\s+(\w+)/)
+        elsif($CurrentMethod and $InParamTable==1 and $LINE=~/\A\s+0\s+\d+\s+\d+\s+(\#?)(\w+)/)
         { # read parameter names from LocalVariableTable
-            my $PName = $1;
-            if($PName ne "this" and $PName=~/[a-z]/i)
+            my $Art = $1;
+            my $PName = $2;
+            
+            if(($PName ne "this" or $Art) and $PName=~/[a-z]/i)
             {
                 if($CurrentMethod)
                 {
@@ -6467,8 +6670,7 @@ sub readClasses($$$)
             }
             else
             {
-                my $ReturnName = $MethodAttr{"Return"};
-                $MethodAttr{"Return"} = registerType($ReturnName, $LibVersion);
+                $MethodAttr{"Return"} = registerType($MethodAttr{"Return"}, $LibVersion);
             }
             
             my @Params = separate_Params($ParamsLine, 0, 1);
@@ -6503,7 +6705,7 @@ sub readClasses($$$)
             }
             
             # read the Signature
-            if($Content[$LineNum++]=~/(Signature|descriptor):\s*(.+)\Z/i)
+            if($LINE_N=~/(Signature|descriptor):\s*(.+)\Z/i)
             { # create run-time unique name ( java/io/PrintStream.println (Ljava/lang/String;)V )
                 if($MethodAttr{"Constructor"}) {
                     $CurrentMethod = $CurrentClass.".\"<init>\":".$2;
@@ -6514,10 +6716,13 @@ sub readClasses($$$)
                 if(my $PackageName = get_SFormat($CurrentPackage)) {
                     $CurrentMethod = $PackageName."/".$CurrentMethod;
                 }
+                
+                $LineNum++;
             }
             else {
                 exitStatus("Error", "internal error - can't read method signature");
             }
+            
             $MethodAttr{"Archive"} = $ArchiveName;
             if($CurrentMethod)
             {
@@ -6557,6 +6762,7 @@ sub readClasses($$$)
                 $Class_Fields{$LibVersion}{$TypeAttr{"Name"}}{$FName}=$TypeAttr{"Fields"}{$FName}{"Type"};
             }
             $TypeAttr{"Fields"}{$FName}{"Pos"} = $FieldPos++;
+            
             # read the Signature
             if($Content[$LineNum++]=~/(Signature|descriptor):\s*(.+)\Z/i)
             {
@@ -6569,6 +6775,7 @@ sub readClasses($$$)
             { # flags: ACC_PUBLIC, ACC_STATIC, ACC_FINAL, ACC_ANNOTATION
                 $LineNum++;
             }
+            
             # read the Value
             if($Content[$LineNum]=~/Constant\s*value:\s*([^\s]+)\s(.*)\Z/i)
             {
@@ -6626,15 +6833,20 @@ sub readClasses($$$)
             {
                 my $Extended = $1;
                 
-                if($TypeAttr{"Type"} eq "class") {
-                    $TypeAttr{"SuperClass"} = registerType($Extended, $LibVersion);
+                if($TypeAttr{"Type"} eq "class")
+                {
+                    if($Extended ne $CurrentPackage.".".$CurrentClass) {
+                        $TypeAttr{"SuperClass"} = registerType($Extended, $LibVersion);
+                    }
                 }
                 elsif($TypeAttr{"Type"} eq "interface")
                 {
                     my @Elems = separate_Params($Extended, 0, 0);
                     foreach my $SuperInterface (@Elems)
                     {
-                        $TypeAttr{"SuperInterface"}{registerType($SuperInterface, $LibVersion)} = 1;
+                        if($SuperInterface ne $CurrentPackage.".".$CurrentClass) {
+                            $TypeAttr{"SuperInterface"}{registerType($SuperInterface, $LibVersion)} = 1;
+                        }
                         
                         if($SuperInterface eq "java.lang.annotation.Annotation") {
                             $TypeAttr{"Annotation"} = 1;
@@ -6661,13 +6873,15 @@ sub readClasses($$$)
                 $TypeAttr{"Static"} = 1;
             }
         }
-        elsif($CurrentMethod and index($LINE, "Deprecated: true")!=-1)
-        { # deprecated method
-            $MethodInfo{$LibVersion}{$CurrentMethod}{"Deprecated"} = 1;
-        }
-        elsif($CurrentClass and index($LINE, "Deprecated: length")!=-1)
-        { # deprecated method
-            $TypeAttr{"Deprecated"} = 1;
+        elsif(index($LINE, "Deprecated: true")!=-1
+        or index($LINE, "Deprecated: length")!=-1)
+        { # deprecated method or class
+            if($CurrentMethod) {
+                $MethodInfo{$LibVersion}{$CurrentMethod}{"Deprecated"} = 1;
+            }
+            elsif($CurrentClass) {
+                $TypeAttr{"Deprecated"} = 1;
+            }
         }
         elsif(index($LINE, "RuntimeInvisibleAnnotations")!=-1
         or index($LINE, "RuntimeVisibleAnnotations")!=-1) {
@@ -6777,9 +6991,9 @@ sub detectAdded()
             if($MethodInfo{2}{$Method}{"Abstract"}) {
                 $AddedMethod_Abstract{$Class{"Name"}}{$Method} = 1;
             }
-            if(not $ShortMode) {
-                %{$CompatProblems{$Method}{"Added_Method"}{""}}=();
-            }
+            
+            %{$CompatProblems{$Method}{"Added_Method"}{""}}=();
+            
             if(not $MethodInfo{2}{$Method}{"Constructor"})
             {
                 if(get_TypeName($MethodInfo{2}{$Method}{"Return"}, 2) ne "void"
@@ -7530,6 +7744,12 @@ sub createArchive($$)
     }
 }
 
+sub getMd5(@)
+{
+    my $Md5 = md5_hex(@_);
+    return substr($Md5, 0, $MD5_LEN);
+}
+
 sub scenario()
 {
     if($BinaryOnly and $SourceOnly)
@@ -7579,6 +7799,13 @@ sub scenario()
         detect_default_paths();
         testSystem();
         exit(0);
+    }
+    
+    if(defined $ShortMode)
+    {
+        if(not defined $AffectLimit) {
+            $AffectLimit = 10;
+        }
     }
     
     if(not $TargetLibraryName)
@@ -7723,8 +7950,12 @@ sub scenario()
         my $MNum = 0;
         foreach my $Method (sort keys(%{$MethodInfo{1}}))
         {
-            $MInfo->{$MNum} = $MethodInfo{1}{$Method};
-            $MInfo->{$MNum}{"Name"} = $Method;
+            my $MId = $MNum;
+            if($REPRODUCIBLE) {
+                $MId = getMd5($Method);
+            }
+            $MInfo->{$MId} = $MethodInfo{1}{$Method};
+            $MInfo->{$MId}{"Name"} = $Method;
             
             $MNum+=1;
         }
@@ -7733,8 +7964,13 @@ sub scenario()
         $MNum = 0;
         foreach my $Inv (sort keys(%{$MethodUsed{1}}))
         {
-            $MUsed->{$MNum}{"Name"} = $Inv;
-            $MUsed->{$MNum}{"Used"} = $MethodUsed{1}{$Inv};
+            my $MId = $MNum;
+            if($REPRODUCIBLE) {
+                $MId = getMd5($Inv);
+            }
+            
+            $MUsed->{$MId}{"Name"} = $Inv;
+            $MUsed->{$MId}{"Used"} = $MethodUsed{1}{$Inv};
             
             $MNum+=1;
         }
