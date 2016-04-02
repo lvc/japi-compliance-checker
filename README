@@ -1,5 +1,5 @@
 NAME:
-  Java API Compliance Checker (Java APICC) - a tool for checking backward binary and source-level compatibility of a Java library API.
+  Java API Compliance Checker (JAPICC) - a tool for checking backward binary and source-level compatibility of a Java library API.
   
   The tool checks classes declarations of old and new versions and analyzes changes that may break compatibility: removed methods, removed class fields, added abstract methods, etc. The tool is intended for developers of software libraries and Linux maintainers who are interested in ensuring backward compatibility.
   

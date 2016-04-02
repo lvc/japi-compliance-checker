@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 ###########################################################################
-# Java API Compliance Checker (Java APICC) 1.6
+# Java API Compliance Checker (JAPICC) 1.6
 # A tool for checking backward compatibility of a Java library API
 #
 # Written by Andrey Ponomarenko
@@ -56,7 +56,8 @@ $ShortMode, $KeepInternal, $OutputReportPath, $BinaryReportPath,
 $SourceReportPath, $Debug, $Quick, $SortDump, $SkipDeprecated, $SkipClassesList,
 $ShowAccess, $AffectLimit, $JdkPath, $SkipInternal, $HideTemplates,
 $HidePackages, $ShowPackages, $Minimal, $AnnotationsListPath,
-$SkipPackagesList, $OutputDumpPath, $AllAffected, $Compact);
+$SkipPackagesList, $OutputDumpPath, $AllAffected, $Compact,
+$SkipAnnotationsListPath);
 
 my $CmdName = get_filename($0);
 my $OSgroup = get_OSgroup();
@@ -96,7 +97,7 @@ my %HomePage = (
     "Wiki"=>"http://ispras.linuxbase.org/index.php/Java_API_Compliance_Checker"
 );
 
-my $ShortUsage = "Java API Compliance Checker (Java APICC) $TOOL_VERSION
+my $ShortUsage = "Java API Compliance Checker (JAPICC) $TOOL_VERSION
 A tool for checking backward compatibility of a Java library API
 Copyright (C) 2016 Andrey Ponomarenko's ABI Laboratory
 License: GNU LGPL or GNU GPL
@@ -151,6 +152,7 @@ GetOptions("h|help!" => \$Help,
   "dump|dump-api=s" => \$DumpAPI,
   "classes-list=s" => \$ClassListPath,
   "annotations-list=s" => \$AnnotationsListPath,
+  "skip-annotations-list=s" => \$SkipAnnotationsListPath,
   "skip-deprecated!" => \$SkipDeprecated,
   "skip-classes=s" => \$SkipClassesList,
   "skip-packages=s" => \$SkipPackagesList,
@@ -203,7 +205,7 @@ NAME:
   Check backward compatibility of a Java library API
 
 DESCRIPTION:
-  Java API Compliance Checker (Java APICC) is a tool for checking backward
+  Java API Compliance Checker (JAPICC) is a tool for checking backward
   binary/source compatibility of a Java library API. The tool checks classes
   declarations of old and new versions and analyzes changes that may break
   compatibility: removed class members, added abstract methods, etc. Breakage
@@ -212,7 +214,7 @@ DESCRIPTION:
   new one. Breakage of the source compatibility may result in recompilation
   errors with a new library version.
 
-  Java APICC is intended for library developers and operating system maintainers
+  JAPICC is intended for library developers and operating system maintainers
   who are interested in ensuring backward compatibility (i.e. allow old clients
   to run or to be recompiled with a new version of a library).
 
@@ -339,8 +341,11 @@ EXTRA OPTIONS:
   
   -annotations-list PATH
       Specifies a file with a list of annotations. The tool will check only
-      classes annotated by the annotations from this list. Other classes
+      classes annotated by the annotations from the list. Other classes
       will not be checked.
+  
+  -skip-annotations-list PATH
+      Skip checking of classes annotated by the annotations in the list.
       
   -skip-deprecated
       Skip analysis of deprecated methods and classes.
@@ -632,7 +637,6 @@ my $ExtractCounter = 0;
 my %Cache;
 my $TOP_REF = "<a class='top_ref' href='#Top'>to the top</a>";
 my %DEBUG_PATH;
-my $JAVA_VERSION;
 
 #Types
 my %TypeInfo;
@@ -655,8 +659,25 @@ my %MethodUsed;
 my %ClassMethod_AddedUsed;
 # my %FieldUsed;
 
+#java.lang.Object
+my %JavaObjectMethod = (
+    
+    "java/lang/Object.clone:()Ljava/lang/Object;" => 1,
+    "java/lang/Object.equals:(Ljava/lang/Object;)Z" => 1,
+    "java/lang/Object.finalize:()V" => 1,
+    "java/lang/Object.getClass:()Ljava/lang/Class;" => 1,
+    "java/lang/Object.hashCode:()I" => 1,
+    "java/lang/Object.notify:()V" => 1,
+    "java/lang/Object.notifyAll:()V" => 1,
+    "java/lang/Object.toString:()Ljava/lang/String;" => 1,
+    "java/lang/Object.wait:()V" => 1,
+    "java/lang/Object.wait:(J)V" => 1,
+    "java/lang/Object.wait:(JI)V" => 1
+);
+
 #Annotations
 my %AnnotationList_User;
+my %SkipAnnotationList_User;
 
 #Methods
 my %CheckedMethods;
@@ -1156,6 +1177,8 @@ sub unpackDump($)
 
 sub mergeClasses()
 {
+    my %ReportedRemoved = undef;
+    
     foreach my $ClassName (keys(%{$Class_Methods{1}}))
     {
         next if(not $ClassName);
@@ -1167,12 +1190,13 @@ sub mergeClasses()
         }
         my $Type2_Id = $TName_Tid{2}{$ClassName};
         if(not $Type2_Id)
-        {
+        { # classes and interfaces with public methods
             foreach my $Method (keys(%{$Class_Methods{1}{$ClassName}}))
-            { # removed classes/interfaces with public methods
+            {
                 next if(not methodFilter($Method, 1));
                 $CheckedTypes{$ClassName} = 1;
                 $CheckedMethods{$Method} = 1;
+                
                 if($Type1{"Type"} eq "class")
                 {
                     %{$CompatProblems{$Method}{"Removed_Class"}{"this"}} = (
@@ -1185,6 +1209,7 @@ sub mergeClasses()
                         "Type_Name"=>$ClassName,
                         "Target"=>$ClassName  );
                 }
+                $ReportedRemoved{$ClassName} = 1;
             }
         }
     }
@@ -1200,13 +1225,74 @@ sub mergeClasses()
         
         my $ClassName = $Class1{"Name"};
         
-        if(not $TName_Tid{2}{$ClassName})
-        {
+        if(my $Class2_Id = $TName_Tid{2}{$ClassName})
+        { # classes and interfaces with public static fields
+            if(not defined $Class_Methods{1}{$ClassName})
+            {
+                my %Class2 = get_Type($Class2_Id, 2);
+                
+                if($Class1{"Type"}=~/class|interface/)
+                {
+                    foreach my $Field (keys(%{$Class1{"Fields"}}))
+                    {
+                        my $FieldInfo = $Class1{"Fields"}{$Field};
+                        my $FAccess = $FieldInfo->{"Access"};
+                        if($FAccess=~/private/) {
+                            next;
+                        }
+                        
+                        if($FieldInfo->{"Static"} and not defined $Class2{"Fields"}{$Field})
+                        {
+                            %{$CompatProblems{".client_method"}{"Removed_NonConstant_Field"}{$Field}}=(
+                                "Target"=>$Field,
+                                "Type_Name"=>$ClassName,
+                                "Type_Type"=>$Class1{"Type"},
+                                "Field_Type"=>get_TypeName($FieldInfo->{"Type"}, 1)  );
+                        }
+                    }
+                }
+            }
+        }
+        else
+        { # removed
             if(defined $Class1{"Annotation"})
             {
-                %{$CompatProblems{"client_method"}{"Removed_Annotation"}{"this"}} = (
+                %{$CompatProblems{".client_method"}{"Removed_Annotation"}{"this"}} = (
                     "Type_Name"=>$ClassName,
                     "Target"=>$ClassName  );
+            }
+            
+            if(not defined $Class_Methods{1}{$ClassName})
+            {
+                # classes and interfaces with public static fields
+                if($Class1{"Type"}=~/class|interface/
+                and not $ReportedRemoved{$ClassName})
+                {
+                    foreach my $Field (keys(%{$Class1{"Fields"}}))
+                    {
+                        my $FieldInfo = $Class1{"Fields"}{$Field};
+                        my $FAccess = $FieldInfo->{"Access"};
+                        if($FAccess=~/private/) {
+                            next;
+                        }
+                        
+                        if($FieldInfo->{"Static"})
+                        {
+                            if($Class1{"Type"} eq "class")
+                            {
+                                %{$CompatProblems{".client_method"}{"Removed_Class"}{"this"}} = (
+                                    "Type_Name"=>$ClassName,
+                                    "Target"=>$ClassName  );
+                            }
+                            else
+                            {
+                                %{$CompatProblems{".client_method"}{"Removed_Interface"}{"this"}} = (
+                                    "Type_Name"=>$ClassName,
+                                    "Target"=>$ClassName  );
+                            }
+                        }
+                    }
+                }
             }
         }
     }
@@ -1976,13 +2062,35 @@ sub methodFilter($$)
     my %Class = get_Type($ClassId, $LibVersion);
     my $Package = $MethodInfo{$LibVersion}{$Method}{"Package"};
     
+    my @Ann = ();
+    
+    if(defined $Class{"Annotations"}) {
+        @Ann = (@Ann, keys(%{$Class{"Annotations"}}));
+    }
+    
+    if(defined $MethodInfo{$LibVersion}{$Method}{"Annotations"}) {
+        @Ann = (@Ann, keys(%{$MethodInfo{$LibVersion}{$Method}{"Annotations"}}));
+    }
+    
+    if($SkipAnnotationsListPath)
+    {
+        foreach my $Aid (@Ann)
+        {
+            my $AName = $TypeInfo{$LibVersion}{$Aid}{"Name"};
+            
+            if(defined $SkipAnnotationList_User{$AName}) {
+                return 0;
+            }
+        }
+    }
+    
     if($AnnotationsListPath)
     {
         my $Annotated = 0;
         
-        foreach my $ANum (keys(%{$Class{"Annotations"}}))
+        foreach my $Aid (@Ann)
         {
-            my $AName = $TypeInfo{$LibVersion}{$ANum}{"Name"};
+            my $AName = $TypeInfo{$LibVersion}{$Aid}{"Name"};
             
             if(defined $AnnotationList_User{$AName})
             {
@@ -2157,6 +2265,20 @@ sub findMethod($$$$)
         }
     }
     
+    my $TargetSuffix = get_MSuffix($Method);
+    my $TargetShortName = get_MShort($Method);
+    
+    # search in java.lang.Object
+    foreach my $C (keys(%JavaObjectMethod))
+    {
+        if($TargetSuffix eq get_MSuffix($C))
+        {
+            if($TargetShortName eq get_MShort($C)) {
+                return $C;
+            }
+        }
+    }
+    
     return "";
 }
 
@@ -2165,6 +2287,11 @@ sub findMethod_Class($$$)
     my ($Method, $ClassName, $ClassVersion) = @_;
     my $TargetSuffix = get_MSuffix($Method);
     my $TargetShortName = get_MShort($Method);
+    
+    if(not defined $Class_Methods{$ClassVersion}{$ClassName}) {
+        return "";
+    }
+    
     foreach my $Candidate (sort keys(%{$Class_Methods{$ClassVersion}{$ClassName}}))
     { # search for method with the same parameters suffix
         next if($MethodInfo{$ClassVersion}{$Candidate}{"Constructor"});
@@ -2175,6 +2302,7 @@ sub findMethod_Class($$$)
             }
         }
     }
+    
     return "";
 }
 
@@ -2530,6 +2658,17 @@ sub get_Signature($$$)
     }
     if($Kind=~/Attr/) {
         $ShowAttr = 1;
+    }
+    
+    if(not defined $MethodInfo{$LibVersion}{$Method}{"ShortName"})
+    { # from java.lang.Object
+        if($Html or $Simple) {
+            return htmlSpecChars($Method);
+        }
+        else
+        {
+            return $Method;
+        }
     }
     
     my $Signature = $MethodInfo{$LibVersion}{$Method}{"ShortName"};
@@ -2932,6 +3071,8 @@ sub runChecker($$$)
     if(defined $SkipDeprecated) {
         $Cmd .= " -skip-deprecated";
     }
+    writeFile($TMP_DIR."/skip-annotations.list", "TestPackage.Beta");
+    $Cmd .= " -skip-annotations-list ".$TMP_DIR."/skip-annotations.list";
     if($Debug)
     {
         $Cmd .= " -debug";
@@ -3260,7 +3401,7 @@ sub get_Summary($)
     $TestInfo .= "<tr><th>Library Name</th><td>$TargetTitle</td></tr>\n";
     $TestInfo .= "<tr><th>Version #1</th><td>".$Descriptor{1}{"Version"}."</td></tr>\n";
     $TestInfo .= "<tr><th>Version #2</th><td>".$Descriptor{2}{"Version"}."</td></tr>\n";
-    # $TestInfo .= "<tr><th>Java Version</th><td>".$JAVA_VERSION."</td></tr>\n";
+    
     if($JoinReport)
     {
         if($Level eq "Binary") {
@@ -4411,6 +4552,10 @@ sub getAffectedMethods($$$)
                     next;
                 }
                 
+                if($Method eq ".client_method") {
+                    next;
+                }
+                
                 $SymLocKind{$Method}{$Loc}{$Kind} = 1;
                 last;
             }
@@ -4418,6 +4563,10 @@ sub getAffectedMethods($$$)
     }
     
     %KLocs = (); # clear
+    
+    if(not keys(%SymLocKind)) {
+        return "";
+    }
     
     my %SymSel = ();
     my $Num = 0;
@@ -5110,6 +5259,7 @@ sub readArchives($)
             }
         }
     }
+    
     foreach my $Method (keys(%{$MethodInfo{$LibVersion}}))
     {
         $MethodInfo{$LibVersion}{$Method}{"Signature"} = get_Signature($Method, $LibVersion, "Full");
@@ -5180,6 +5330,17 @@ sub testSystem()
     public \@interface RemovedAnnotation {
     }");
     
+    # Beta Annotation
+    writeFile($Path_v1."/Beta.java",
+    "package $PackageName;
+    public \@interface Beta {
+    }");
+    
+    writeFile($Path_v2."/Beta.java",
+    "package $PackageName;
+    public \@interface Beta {
+    }");
+    
     # BaseClass
     my $BaseClass = "package $PackageName;
     public class BaseClass {
@@ -5224,6 +5385,48 @@ sub testSystem()
     }";
     writeFile($Path_v1."/BaseConstantInterface.java", $BaseConstantInterface);
     writeFile($Path_v2."/BaseConstantInterface.java", $BaseConstantInterface);
+    
+    # Removed_Method (Beta method)
+    writeFile($Path_v1."/RemovedBetaMethod.java",
+    "package $PackageName;
+    public class RemovedBetaMethod
+    {
+        \@Beta
+        public Integer someMethod() {
+            return 0;
+        }
+    }");
+    writeFile($Path_v2."/RemovedBetaMethod.java",
+    "package $PackageName;
+    public class RemovedBetaMethod {
+    }");
+    
+    # Removed_Method (from Beta class)
+    writeFile($Path_v1."/RemovedMethodFromBetaClass.java",
+    "package $PackageName;
+    \@Beta
+    public class RemovedMethodFromBetaClass
+    {
+        public Integer someMethod() {
+            return 0;
+        }
+    }");
+    writeFile($Path_v2."/RemovedMethodFromBetaClass.java",
+    "package $PackageName;
+    \@Beta
+    public class RemovedMethodFromBetaClass {
+    }");
+    
+    # Removed_Class (Beta)
+    writeFile($Path_v1."/RemovedBetaClass.java",
+    "package $PackageName;
+    \@Beta
+    public class RemovedBetaClass
+    {
+        public Integer someMethod() {
+            return 0;
+        }
+    }");
     
     # Abstract_Method_Added_Checked_Exception
     writeFile($Path_v1."/AbstractMethodAddedCheckedException.java",
@@ -5578,6 +5781,26 @@ sub testSystem()
         public Integer field = 100;
     }");
     
+    # Removed_Method (move up to java.lang.Object)
+    writeFile($Path_v1."/MoveUpToJavaLangObject.java",
+    "package $PackageName;
+    public class MoveUpToJavaLangObject extends java.lang.Object {
+        public int hashCode() { return 0; }
+    }");
+    writeFile($Path_v2."/MoveUpToJavaLangObject.java",
+    "package $PackageName;
+    public class MoveUpToJavaLangObject extends java.lang.Object {
+    }");
+    
+    writeFile($TestsPath."/Test_MoveUpToJavaLangObject.java",
+    "import $PackageName.*;
+    public class Test_MoveUpToJavaLangObject {
+        public static void main(String[] args) {
+            MoveUpToJavaLangObject X = new MoveUpToJavaLangObject();
+            int R = X.hashCode();
+        }
+    }");
+    
     # Removed_Method (Deprecated)
     writeFile($Path_v1."/RemovedDeprecatedMethod.java",
     "package $PackageName;
@@ -5816,6 +6039,92 @@ sub testSystem()
     public class RemovedClass extends BaseClass {
         public Integer someMethod(Integer param){
             return param;
+        }
+    }");
+    
+    # Removed_Class (w/o methods)
+    writeFile($Path_v1."/RemovedFieldClass.java",
+    "package $PackageName;
+    public class RemovedFieldClass {
+        public Integer field;
+    }");
+    
+    writeFile($TestsPath."/Test_RemovedFieldClass.java",
+    "import $PackageName.*;
+    public class Test_RemovedFieldClass extends RemovedFieldClass
+    {
+        public static void main(String[] args)
+        {
+            RemovedFieldClass X = new RemovedFieldClass();
+            Integer Copy = X.field;
+        }
+    }");
+    
+    # Removed_Class (with static fields, private constructor)
+    writeFile($Path_v1."/RemovedClassWithStaticField.java",
+    "package $PackageName;
+    public class RemovedClassWithStaticField
+    {
+        private RemovedClassWithStaticField(){}
+        public static Integer cnt = 0;
+    }");
+    
+    writeFile($TestsPath."/Test_RemovedClassWithStaticField.java",
+    "import $PackageName.*;
+    public class Test_RemovedClassWithStaticField
+    {
+        public static void main(String[] args)
+        {
+            Integer Copy = RemovedClassWithStaticField.cnt;
+        }
+    }");
+    
+    # Removed_Field (static field, private constructor)
+    writeFile($Path_v1."/RemovedStaticFieldFromClassWithPrivateCtor.java",
+    "package $PackageName;
+    public class RemovedStaticFieldFromClassWithPrivateCtor
+    {
+        private RemovedStaticFieldFromClassWithPrivateCtor(){}
+        public static Integer cnt = 0;
+    }");
+    
+    writeFile($Path_v2."/RemovedStaticFieldFromClassWithPrivateCtor.java",
+    "package $PackageName;
+    public class RemovedStaticFieldFromClassWithPrivateCtor
+    {
+        private RemovedStaticFieldFromClassWithPrivateCtor(){}
+    }");
+    
+    writeFile($TestsPath."/Test_RemovedStaticFieldFromClassWithPrivateCtor.java",
+    "import $PackageName.*;
+    public class Test_RemovedStaticFieldFromClassWithPrivateCtor
+    {
+        public static void main(String[] args)
+        {
+            Integer Copy = RemovedStaticFieldFromClassWithPrivateCtor.cnt;
+        }
+    }");
+    
+    # Removed_Constant_Field
+    writeFile($Path_v1."/ClassRemovedStaticConstantField.java",
+    "package $PackageName;
+    public class ClassRemovedStaticConstantField
+    {
+        public static int removedField_Int = 1000;
+        public static String removedField_Str = \"Value\";
+    }");
+    writeFile($Path_v2."/ClassRemovedStaticConstantField.java",
+    "package $PackageName;
+    public class ClassRemovedStaticConstantField {
+    }");
+    
+    writeFile($TestsPath."/Test_ClassRemovedStaticConstantField.java",
+    "import $PackageName.*;
+    public class Test_ClassRemovedStaticConstantField
+    {
+        public static void main(String[] args)
+        {
+            Integer Copy = ClassRemovedStaticConstantField.removedField_Int;
         }
     }");
     
@@ -6489,7 +6798,10 @@ sub readClasses($$$)
     my ($InParamTable, $InExceptionTable, $InCode) = (0, 0, 0);
     
     my $InAnnotations = undef;
-    my %AnnotationNums = ();
+    my $InAnnotations_Class = undef;
+    my $InAnnotations_Method = undef;
+    my %AnnotationName = ();
+    my %AnnotationNum = (); # support for Java 7
     
     my ($ParamPos, $FieldPos, $LineNum) = (0, 0, 0);
     while($LineNum<=$#Content)
@@ -6520,25 +6832,36 @@ sub readClasses($$$)
         $LINE=~s/\$([\> ]|\Z)/$1/g;
         $LINE_N=~s/\$([\> ]|\Z)/$1/g;
         
-        if($LINE eq "\n" or $LINE eq "}\n") {
+        if($LINE eq "\n" or $LINE eq "}\n")
+        {
             $CurrentMethod = undef;
+            $InCode = 0;
+            $InAnnotations_Method = 0
+        }
+        
+        if($LINE eq "}\n") {
+            $InAnnotations_Class = 1;
         }
         
         if($LINE=~/\A\s*#(\d+)/)
         { # Constant pool
             my $CNum = $1;
-            if(defined $AnnotationNums{$CNum})
+            if($LINE=~/\s+([^ ]+?);/)
             {
-                if($LINE=~/\s+([^ ]+?);/)
-                {
-                    my $AName = $1;
-                    $AName=~s/\AL//;
-                    $AName=~s/\A.*\///g;
-                    $AName=~s/\$/./g;
-                    
-                    $TypeAttr{"Annotations"}{registerType($AName, $LibVersion)} = 1;
+                my $AName = $1;
+                $AName=~s/\AL//;
+                $AName=~s/\$/./g;
+                $AName=~s/\//./g;
+                
+                $AnnotationName{$CNum} = $AName;
+                
+                if(defined $AnnotationNum{$CNum})
+                { # support for Java 7
+                    if($InAnnotations_Class) {
+                        $TypeAttr{"Annotations"}{registerType($AName, $LibVersion)} = 1;
+                    }
+                    delete($AnnotationNum{$CNum});
                 }
-                delete($AnnotationNums{$CNum});
             }
             
             next;
@@ -6606,10 +6929,23 @@ sub readClasses($$$)
                     # }
                 }
             }
-            else
+            elsif(defined $InAnnotations)
             {
-                if(defined $InAnnotations and $LINE=~/\A\s*\d+\:\s*#(\d+)/) {
-                    $AnnotationNums{$1} = 1;
+                if($LINE=~/\A\s*\d+\:\s*#(\d+)/)
+                {
+                    if(my $AName = $AnnotationName{$1})
+                    {
+                        if($InAnnotations_Class) {
+                            $TypeAttr{"Annotations"}{registerType($AName, $LibVersion)} = 1;
+                        }
+                        elsif($InAnnotations_Method) {
+                            $MethodInfo{$LibVersion}{$CurrentMethod}{"Annotations"}{registerType($AName, $LibVersion)} = 1;
+                        }
+                    }
+                    else
+                    { # suport for Java 7
+                        $AnnotationNum{$1} = 1;
+                    }
                 }
             }
         }
@@ -6639,7 +6975,8 @@ sub readClasses($$$)
             
             $InParamTable = 0; # read the first local variable table
             $InCode = 0; # read the first code
-            %AnnotationNums = (); # reset annotations of the class
+            $InAnnotations_Method = 1;
+            $InAnnotations_Class = 0;
             
             ($MethodAttr{"Return"}, $MethodAttr{"ShortName"}, $ParamsLine, $Exceptions) = ($2, $3, $4, $6);
             $MethodAttr{"ShortName"}=~s/#/./g;
@@ -6803,7 +7140,9 @@ sub readClasses($$$)
             }
             
             %TypeAttr = ("Type"=>$2, "Name"=>$3); # reset previous class
-            %AnnotationNums = (); # reset annotations of the class
+            %AnnotationName = (); # reset annotations of the class
+            %AnnotationNum = (); # support for Java 7
+            $InAnnotations_Class = 1;
             
             $FieldPos = 0; # reset field position
             $CurrentMethod = ""; # reset current method
@@ -6884,8 +7223,10 @@ sub readClasses($$$)
             }
         }
         elsif(index($LINE, "RuntimeInvisibleAnnotations")!=-1
-        or index($LINE, "RuntimeVisibleAnnotations")!=-1) {
+        or index($LINE, "RuntimeVisibleAnnotations")!=-1)
+        {
             $InAnnotations = 1;
+            $InCode = 0;
         }
         elsif(defined $InAnnotations and index($LINE, "InnerClasses")!=-1) {
             $InAnnotations = undef;
@@ -7017,7 +7358,8 @@ sub detectRemoved()
 {
     foreach my $Method (keys(%{$MethodInfo{1}}))
     {
-        if(not defined $MethodInfo{2}{$Method}) {
+        if(not defined $MethodInfo{2}{$Method})
+        {
             next if($MethodInfo{1}{$Method}{"Access"}=~/private/);
             next if(not methodFilter($Method, 1));
             my $ClassId = $MethodInfo{1}{$Method}{"Class"};
@@ -7028,7 +7370,8 @@ sub detectRemoved()
             }
             $CheckedMethods{$Method} = 1;
             if(not $MethodInfo{1}{$Method}{"Constructor"} and $TName_Tid{2}{$Class{"Name"}}
-            and my $MovedUp = findMethod($Method, 1, $Class{"Name"}, 2)) {
+            and my $MovedUp = findMethod($Method, 1, $Class{"Name"}, 2))
+            {
                 if(get_TypeType($ClassId, 1) eq "class"
                 and not $MethodInfo{1}{$Method}{"Abstract"} and $TName_Tid{2}{$Class{"Name"}})
                 {# class should exist in newer version
@@ -7039,7 +7382,8 @@ sub detectRemoved()
                         "New_Value"=>$MovedUp  );
                 }
             }
-            else {
+            else
+            {
                 if($MethodInfo{1}{$Method}{"Abstract"}) {
                     $RemovedMethod_Abstract{$Class{"Name"}}{$Method} = 1;
                 }
@@ -7530,14 +7874,12 @@ sub detect_default_paths()
     
     if(not $TestSystem)
     {
-        if(my $JavaCmd = get_CmdPath("java"))
+        if(my $JavacCmd = get_CmdPath("javac"))
         {
-            if(my $Ver = `$JavaCmd -version 2>&1`)
+            if(my $Ver = `$JavacCmd -version 2>&1`)
             {
-                if($Ver=~/(java|openjdk) version "(.+)\"/)
-                {
-                    $JAVA_VERSION = $2;
-                    printMsg("INFO", "using Java ".$JAVA_VERSION);
+                if($Ver=~/javac\s+(.+)/) {
+                    printMsg("INFO", "using Java ".$1);
                 }
             }
         }
@@ -7571,7 +7913,7 @@ sub printMsg($$)
 sub printStatMsg($)
 {
     my $Level = $_[0];
-    printMsg("INFO", "total \"$Level\" compatibility problems: ".$RESULT{$Level}{"Problems"}.", warnings: ".$RESULT{$Level}{"Warnings"});
+    printMsg("INFO", "total ".lc($Level)." compatibility problems: ".$RESULT{$Level}{"Problems"}.", warnings: ".$RESULT{$Level}{"Warnings"});
 }
 
 sub printReport()
@@ -7581,11 +7923,15 @@ sub printReport()
     if($JoinReport or $DoubleReport)
     {
         if($RESULT{"Binary"}{"Problems"}
-        or $RESULT{"Source"}{"Problems"}) {
-            printMsg("INFO", "result: INCOMPATIBLE (Binary: ".$RESULT{"Binary"}{"Affected"}."\%, Source: ".$RESULT{"Source"}{"Affected"}."\%)");
+        or $RESULT{"Source"}{"Problems"})
+        {
+            printMsg("INFO", "binary compatibility: ".(100-$RESULT{"Binary"}{"Affected"})."\%");
+            printMsg("INFO", "source compatibility: ".(100-$RESULT{"Source"}{"Affected"})."\%");
         }
-        else {
-            printMsg("INFO", "result: COMPATIBLE");
+        else
+        {
+            printMsg("INFO", "binary compatibility: 100\%");
+            printMsg("INFO", "source compatibility: 100\%");
         }
         printStatMsg("Binary");
         printStatMsg("Source");
@@ -7593,20 +7939,20 @@ sub printReport()
     elsif($BinaryOnly)
     {
         if($RESULT{"Binary"}{"Problems"}) {
-            printMsg("INFO", "result: INCOMPATIBLE (".$RESULT{"Binary"}{"Affected"}."\%)");
+            printMsg("INFO", "binary compatibility: ".(100-$RESULT{"Binary"}{"Affected"})."\%");
         }
         else {
-            printMsg("INFO", "result: COMPATIBLE");
+            printMsg("INFO", "binary compatibility: 100\%");
         }
         printStatMsg("Binary");
     }
     elsif($SourceOnly)
     {
         if($RESULT{"Source"}{"Problems"}) {
-            printMsg("INFO", "result: INCOMPATIBLE (".$RESULT{"Source"}{"Affected"}."\%)");
+            printMsg("INFO", "source compatibility: ".(100-$RESULT{"Source"}{"Affected"})."\%");
         }
         else {
-            printMsg("INFO", "result: COMPATIBLE");
+            printMsg("INFO", "source compatibility: 100\%");
         }
         printStatMsg("Source");
     }
@@ -7616,7 +7962,7 @@ sub printReport()
     }
     elsif($DoubleReport)
     { # default
-        printMsg("INFO", "\nreport (BC): ".getReportPath("Binary"));
+        printMsg("INFO", "report (BC): ".getReportPath("Binary"));
         printMsg("INFO", "report (SC): ".getReportPath("Source"));
     }
     elsif($BinaryOnly)
@@ -7777,7 +8123,7 @@ sub scenario()
     }
     if(defined $ShowVersion)
     {
-        printMsg("INFO", "Java API Compliance Checker (Java APICC) $TOOL_VERSION\nCopyright (C) 2016 Andrey Ponomarenko's ABI Laboratory\nLicense: LGPL or GPL <http://www.gnu.org/licenses/>\nThis program is free software: you can redistribute it and/or modify it.\n\nWritten by Andrey Ponomarenko.");
+        printMsg("INFO", "Java API Compliance Checker (JAPICC) $TOOL_VERSION\nCopyright (C) 2016 Andrey Ponomarenko's ABI Laboratory\nLicense: LGPL or GPL <http://www.gnu.org/licenses/>\nThis program is free software: you can redistribute it and/or modify it.\n\nWritten by Andrey Ponomarenko.");
         exit(0);
     }
     if(defined $DumpVersion)
@@ -7876,6 +8222,16 @@ sub scenario()
             $AnnotationList_User{$Annotation} = 1;
         }
     }
+    if($SkipAnnotationsListPath)
+    {
+        if(not -f $SkipAnnotationsListPath) {
+            exitStatus("Access_Error", "can't access file \'$SkipAnnotationsListPath\'");
+        }
+        foreach my $Annotation (split(/\n/, readFile($SkipAnnotationsListPath)))
+        {
+            $SkipAnnotationList_User{$Annotation} = 1;
+        }
+    }
     if($SkipClassesList)
     {
         if(not -f $SkipClassesList) {
@@ -7942,9 +8298,9 @@ sub scenario()
         readArchives(1);
         
         printMsg("INFO", "creating library API dump ...");
-        
-        
-        
+        if(not keys(%{$MethodInfo{1}})) {
+            printMsg("WARNING", "empty dump");
+        }
         
         my $MInfo = {};
         my $MNum = 0;
