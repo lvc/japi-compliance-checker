@@ -40,6 +40,7 @@ Getopt::Long::Configure ("posix_default", "no_ignore_case", "permute");
 use File::Path qw(mkpath rmtree);
 use File::Temp qw(tempdir);
 use File::Copy qw(copy);
+use File::Spec::Functions qw(abs2rel);
 use Cwd qw(abs_path cwd);
 use Data::Dumper;
 use Digest::MD5 qw(md5_hex);
@@ -57,7 +58,7 @@ $SourceReportPath, $Debug, $Quick, $SortDump, $SkipDeprecated, $SkipClassesList,
 $ShowAccess, $AffectLimit, $JdkPath, $SkipInternal, $HideTemplates,
 $HidePackages, $ShowPackages, $Minimal, $AnnotationsListPath,
 $SkipPackagesList, $OutputDumpPath, $AllAffected, $Compact,
-$SkipAnnotationsListPath);
+$SkipAnnotationsListPath, $ExternCss, $ExternJs);
 
 my $CmdName = get_filename($0);
 my $OSgroup = get_OSgroup();
@@ -173,10 +174,13 @@ GetOptions("h|help!" => \$Help,
   "debug!" => \$Debug,
   "title=s" => \$TargetTitle,
   "jdk-path=s" => \$JdkPath,
-  "all-affected!" => \$AllAffected,
+  "external-css=s" => \$ExternCss,
+  "external-js=s" => \$ExternJs,
 # deprecated
   "minimal!" => \$Minimal,
-  "hide-packages!" => \$HidePackages
+  "hide-packages!" => \$HidePackages,
+# private
+  "all-affected!" => \$AllAffected
 ) or ERR_MESSAGE();
 
 if(@ARGV)
@@ -308,24 +312,19 @@ EXTRA OPTIONS:
 
   -v2|-version2 NUM
       Specify 2nd library version outside the descriptor.
-  
+
   -vnum NUM
       Specify the library version in the generated API dump.
-      
+
   -s|-strict
       Treat all API compatibility warnings as problems.
-      
+
   -keep-internal
       Do not skip checking of these packages:
         *impl*
         *internal*
         *examples*
-        *com.oracle*
-        *com.sun*
-        *COM.rsa*
-        *sun*
-        *sunw*
-        
+
   -skip-internal PATTERN
       Do not check internal packages matched by the pattern.
       
@@ -333,7 +332,6 @@ EXTRA OPTIONS:
       Dump library API to gzipped TXT format file. You can transfer it
       anywhere and pass instead of the descriptor. Also it may be used
       for debugging the tool. Compatible dump versions: $API_DUMP_MAJOR.0<=V<=$API_DUMP_VERSION
-      
       
   -classes-list PATH
       This option allows to specify a file with a list
@@ -429,14 +427,21 @@ OTHER OPTIONS:
   -title NAME
       Change library name in the report title to NAME. By default
       will be displayed a name specified by -l option.
-      
+
   -jdk-path PATH
       Path to the JDK install tree (e.g. /usr/lib/jvm/java-7-openjdk-amd64).
+
+  -external-css PATH
+      Generate CSS styles file to PATH. This helps to save space when
+      generating thousands of reports.
+
+  -external-js PATH
+      Generate JS script file to PATH.
 
 REPORT:
     Compatibility report will be generated to:
         compat_reports/LIB_NAME/V1_to_V2/compat_report.html
-      
+
 EXIT CODES:
     0 - Compatible. The tool has run without any errors.
     non-zero - Incompatible or the tool has run with errors.
@@ -2168,16 +2173,16 @@ sub skip_package($$)
     {
         my $Note = (not keys %SkippedPackage)?" (use --keep-internal option to check them)":"";
         
-        if($Package=~/\A(com\.oracle|com\.sun|COM\.rsa|sun|sunw)(\.|\Z)/)
-        { # private packages
-          # http://java.sun.com/products/jdk/faq/faq-sun-packages.html
-            if(not $SkippedPackage{$LibVersion}{$1})
-            {
-                $SkippedPackage{$LibVersion}{$1} = 1;
-                printMsg("WARNING", "skip \"$1\" packages".$Note);
-            }
-            return 1;
-        }
+        # if($Package=~/\A(com\.oracle|com\.sun|COM\.rsa|sun|sunw)(\.|\Z)/)
+        # { # private packages
+        #   # http://java.sun.com/products/jdk/faq/faq-sun-packages.html
+        #     if(not $SkippedPackage{$LibVersion}{$1})
+        #     {
+        #         $SkippedPackage{$LibVersion}{$1} = 1;
+        #         printMsg("WARNING", "skip \"$1\" packages".$Note);
+        #     }
+        #     return 1;
+        # }
         if($Package=~/(\A|\.)(internal|impl|examples)(\.|\Z)/)
         { # internal packages
             if(not $SkippedPackage{$LibVersion}{$2})
@@ -3148,7 +3153,7 @@ sub get_Report_Header($)
     }
     $Report_Header .= " report for the <span style='color:Blue;'>$TargetTitle</span> library between <span style='color:Red;'>".$Descriptor{1}{"Version"}."</span> and <span style='color:Red;'>".$Descriptor{2}{"Version"}."</span> versions";
     if($ClientPath) {
-        $Report_Header .= " (relating to the portability of client application <span style='color:Blue;'>".get_filename($ClientPath)."</span>)";
+        $Report_Header .= " (concerning portability of the client: <span style='color:Blue;'>".get_filename($ClientPath)."</span>)";
     }
     $Report_Header .= "</h1>\n";
     return $Report_Header;
@@ -3397,7 +3402,7 @@ sub get_Summary($)
     
     # test info
     $TestInfo .= "<h2>Test Info</h2><hr/>\n";
-    $TestInfo .= "<table cellpadding='3' cellspacing='0' class='summary'>\n";
+    $TestInfo .= "<table class='summary'>\n";
     $TestInfo .= "<tr><th>Library Name</th><td>$TargetTitle</td></tr>\n";
     $TestInfo .= "<tr><th>Version #1</th><td>".$Descriptor{1}{"Version"}."</td></tr>\n";
     $TestInfo .= "<tr><th>Version #2</th><td>".$Descriptor{2}{"Version"}."</td></tr>\n";
@@ -3415,7 +3420,7 @@ sub get_Summary($)
     
     # test results
     $TestResults .= "<h2>Test Results</h2><hr/>";
-    $TestResults .= "<table cellpadding='3' cellspacing='0' class='summary'>";
+    $TestResults .= "<table class='summary'>";
     
     my $Checked_Archives_Link = "0";
     $Checked_Archives_Link = "<a href='#Checked_Archives' style='color:Blue;'>".keys(%{$LibArchives{1}})."</a>" if(keys(%{$LibArchives{1}})>0);
@@ -3461,7 +3466,7 @@ sub get_Summary($)
     
     # Problem Summary
     $Problem_Summary .= "<h2>Problem Summary</h2><hr/>";
-    $Problem_Summary .= "<table cellpadding='3' cellspacing='0' class='summary'>";
+    $Problem_Summary .= "<table class='summary'>";
     $Problem_Summary .= "<tr><th></th><th style='text-align:center;'>Severity</th><th style='text-align:center;'>Count</th></tr>";
     
     my $Added_Link = "0";
@@ -3632,7 +3637,7 @@ sub get_Report_Added($)
                 $ADDED_METHODS .= "<span class='jar'>$ArchiveName</span>, <span class='cname'>".htmlSpecChars($ClassName).".class</span><br/>\n";
                 
                 if($NameSpace) {
-                    $ADDED_METHODS .= "<span class='package_title'>package</span> <span class='package'>$NameSpace</span><br/>\n";
+                    $ADDED_METHODS .= "<span class='pkg_t'>package</span> <span class='pkg'>$NameSpace</span><br/>\n";
                 }
                 
                 if($Compact) {
@@ -3726,7 +3731,7 @@ sub get_Report_Removed($)
                 $REMOVED_METHODS .= "<span class='jar'>$ArchiveName</span>, <span class='cname'>".htmlSpecChars($ClassName).".class</span><br/>\n";
                 
                 if($NameSpace) {
-                    $REMOVED_METHODS .= "<span class='package_title'>package</span> <span class='package'>$NameSpace</span><br/>\n";
+                    $REMOVED_METHODS .= "<span class='pkg_t'>package</span> <span class='pkg'>$NameSpace</span><br/>\n";
                 }
                 
                 if($Compact) {
@@ -3822,7 +3827,7 @@ sub get_Report_MethodProblems($$)
             {
                 $METHOD_PROBLEMS .= "<span class='jar'>$ArchiveName</span>, <span class='cname'>$ClassName.class</span><br/>\n";
                 if($NameSpace) {
-                    $METHOD_PROBLEMS .= "<span class='package_title'>package</span> <span class='package'>$NameSpace</span><br/>\n";
+                    $METHOD_PROBLEMS .= "<span class='pkg_t'>package</span> <span class='pkg'>$NameSpace</span><br/>\n";
                 }
                 
                 my @SortedMethods = sort {lc($MethodInfo{1}{$a}{"Signature"}) cmp lc($MethodInfo{1}{$b}{"Signature"})} keys(%{$NameSpace_Method{$NameSpace}});
@@ -4038,7 +4043,7 @@ sub get_Report_TypeProblems($$)
         {
             $TYPE_PROBLEMS .= "<span class='jar'>$ArchiveName</span><br/>\n";
             if($NameSpace) {
-                $TYPE_PROBLEMS .= "<span class='package_title'>package</span> <span class='package'>".$NameSpace."</span><br/>\n";
+                $TYPE_PROBLEMS .= "<span class='pkg_t'>package</span> <span class='pkg'>".$NameSpace."</span><br/>\n";
             }
             
             my @SortedTypes = sort {lc($a) cmp lc($b)} keys(%{$NameSpace_Type{$NameSpace}});
@@ -4611,8 +4616,10 @@ sub getAffectedMethods($$$)
     $Affected = "<div class='affected'>".$Affected."</div>";
     if($Affected)
     {
+        my $Num = keys(%SymLocKind);
+        my $Per = show_number($Num*100/keys(%CheckedMethods));
         $Affected =  $ContentDivStart.$Affected.$ContentDivEnd;
-        $Affected =  $ContentSpanStart_Affected."[+] affected methods (".keys(%SymLocKind).")".$ContentSpanEnd.$Affected;
+        $Affected =  $ContentSpanStart_Affected."[+] affected methods: $Num ($Per\%)".$ContentSpanEnd.$Affected;
     }
     
     return ($Affected);
@@ -4761,6 +4768,12 @@ sub writeReport($$)
     writeFile($RPath, $Report);
 }
 
+sub getRelPath($$)
+{
+    my ($A, $B) = @_;
+    return abs2rel($A, get_dirname($B));
+}
+
 sub createReport()
 {
     if($JoinReport)
@@ -4782,9 +4795,8 @@ sub createReport()
     }
 }
 
-sub getReport($)
+sub getCssStyles()
 {
-    my $Level = $_[0];
     my $CssStyles = "
     body {
         font-family:Arial, sans-serif;
@@ -4839,22 +4851,15 @@ sub getReport($)
         font-size:0.875em;
         font-weight:bold;
     }
-    div.class_list {
-        padding-left:5px;
-        font-size:0.94em;
-    }
     div.jar_list {
         padding-left:5px;
         font-size:0.94em;
     }
-    span.package_title {
+    span.pkg_t {
         color:#408080;
         font-size:0.875em;
     }
-    span.package_list {
-        font-size:0.875em;
-    }
-    span.package {
+    span.pkg {
         color:#408080;
         font-size:0.875em;
         font-weight:bold;
@@ -4997,24 +5002,7 @@ sub getReport($)
         font-size:0.75em;
     }";
     
-    my $JScripts = "
-    function sC(header, id)
-    {
-        e = document.getElementById(id);
-        if(e.style.display == 'none')
-        {
-            e.style.display = 'block';
-            e.style.visibility = 'visible';
-            header.innerHTML = header.innerHTML.replace(/\\\[[^0-9 ]\\\]/gi,\"[&minus;]\");
-        }
-        else
-        {
-            e.style.display = 'none';
-            e.style.visibility = 'hidden';
-            header.innerHTML = header.innerHTML.replace(/\\\[[^0-9 ]\\\]/gi,\"[+]\");
-        }
-    }";
-    if($JoinReport)
+    if($JoinReport or $ExternCss)
     {
         $CssStyles .= "
     .tabset {
@@ -5051,6 +5039,33 @@ sub getReport($)
         width:100%;
         clear:both;
     }";
+    }
+    
+    return $CssStyles;
+}
+
+sub getJsScript()
+{
+    my $JScripts = "
+    function sC(header, id)
+    {
+        e = document.getElementById(id);
+        if(e.style.display == 'none')
+        {
+            e.style.display = 'block';
+            e.style.visibility = 'visible';
+            header.innerHTML = header.innerHTML.replace(/\\\[[^0-9 ]\\\]/gi,\"[&minus;]\");
+        }
+        else
+        {
+            e.style.display = 'none';
+            e.style.visibility = 'hidden';
+            header.innerHTML = header.innerHTML.replace(/\\\[[^0-9 ]\\\]/gi,\"[+]\");
+        }
+    }";
+    
+    if($JoinReport or $ExternJs)
+    {
         $JScripts .= "
     function initTabs()
     {
@@ -5115,6 +5130,28 @@ sub getReport($)
     else if (window.attachEvent) window.attachEvent('onload', initTabs);";
     }
     
+    return $JScripts;
+}
+
+sub getReport($)
+{
+    my $Level = $_[0];
+    
+    my $CssStyles = getCssStyles();
+    my $JScripts = getJsScript();
+    
+    if(defined $ExternCss)
+    {
+        $CssStyles=~s/\n    /\n/g;
+        writeFile($ExternCss, $CssStyles);
+    }
+    
+    if(defined $ExternJs)
+    {
+        $JScripts=~s/\n    /\n/g;
+        writeFile($ExternJs, $JScripts);
+    }
+    
     if($Level eq "Join")
     {
         my $Title = "$TargetTitle: ".$Descriptor{1}{"Version"}." to ".$Descriptor{2}{"Version"}." compatibility report";
@@ -5122,7 +5159,7 @@ sub getReport($)
         my $Description = "Compatibility report for the $TargetTitle library between ".$Descriptor{1}{"Version"}." and ".$Descriptor{2}{"Version"}." versions";
         my ($BSummary, $BMetaData) = get_Summary("Binary");
         my ($SSummary, $SMetaData) = get_Summary("Source");
-        my $Report = "<!-\- $BMetaData -\->\n<!-\- $SMetaData -\->\n".composeHTML_Head($Title, $Keywords, $Description, $CssStyles, $JScripts)."<body><a name='Source'></a><a name='Binary'></a><a name='Top'></a>";
+        my $Report = "<!-\- $BMetaData -\->\n<!-\- $SMetaData -\->\n".composeHTML_Head($Level, $Title, $Keywords, $Description, $CssStyles, $JScripts)."<body><a name='Source'></a><a name='Binary'></a><a name='Top'></a>";
         $Report .= get_Report_Header("Join")."
         <br/><div class='tabset'>
         <a id='BinaryID' href='#BinaryTab' class='tab active'>Binary<br/>Compatibility</a>
@@ -5141,7 +5178,7 @@ sub getReport($)
         my $Keywords = "$TargetTitle, ".lc($Level).", compatibility";
         my $Description = "$Level compatibility report for the $TargetTitle library between ".$Descriptor{1}{"Version"}." and ".$Descriptor{2}{"Version"}." versions";
         
-        my $Report = "<!-\- $MetaData -\->\n".composeHTML_Head($Title, $Keywords, $Description, $CssStyles, $JScripts)."<body><a name='Top'></a>";
+        my $Report = "<!-\- $MetaData -\->\n".composeHTML_Head($Level, $Title, $Keywords, $Description, $CssStyles, $JScripts)."<body><a name='Top'></a>";
         $Report .= get_Report_Header($Level)."\n".$Summary."\n";
         $Report .= get_Report_Added($Level).get_Report_Removed($Level);
         $Report .= get_Report_Problems("High", $Level).get_Report_Problems("Medium", $Level).get_Report_Problems("Low", $Level).get_Report_Problems("Safe", $Level);
@@ -5194,27 +5231,42 @@ sub get_Report_Problems($$)
     return $Report;
 }
 
-sub composeHTML_Head($$$$$)
+sub composeHTML_Head($$$$$$)
 {
-    my ($Title, $Keywords, $Description, $Styles, $Scripts) = @_;
-    return "<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Transitional//EN\" \"http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd\">
-    <html xmlns=\"http://www.w3.org/1999/xhtml\" xml:lang=\"en\" lang=\"en\">
-    <head>
-    <meta http-equiv=\"Content-Type\" content=\"text/html; charset=utf-8\" />
-    <meta name=\"keywords\" content=\"$Keywords\" />
-    <meta name=\"description\" content=\"$Description\" />
-    <title>
-        $Title
-    </title>
-    <style type=\"text/css\">
-    $Styles
-    </style>
-    <script type=\"text/javascript\" language=\"JavaScript\">
-    <!--
-    $Scripts
-    -->
-    </script>
-    </head>";
+    my ($Level, $Title, $Keywords, $Description, $Styles, $Scripts) = @_;
+    
+    my $Head = "<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Transitional//EN\" \"http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd\">\n";
+    $Head .= "<html xmlns=\"http://www.w3.org/1999/xhtml\" xml:lang=\"en\" lang=\"en\">\n";
+    $Head .= "<head>\n";
+    $Head .= "<meta http-equiv=\"Content-Type\" content=\"text/html; charset=utf-8\" />\n";
+    $Head .= "<meta name=\"keywords\" content=\"$Keywords\" />\n";
+    $Head .= "<meta name=\"description\" content=\"$Description\" />\n";
+    
+    my $RPath = getReportPath($Level);
+    
+    if(defined $ExternCss) {
+        $Head .= "<link rel=\"stylesheet\" type=\"text/css\" href=\"".getRelPath($ExternCss, $RPath)."\" />\n";
+    }
+    
+    if(defined $ExternJs) {
+        $Head .= "<script type=\"text/javascript\" src=\"".getRelPath($ExternJs, $RPath)."\"></script>\n";
+    }
+    
+    $Head .= "<title>$Title</title>\n";
+    
+    if(not defined $ExternCss) {
+        $Head .= "<style type=\"text/css\">\n$Styles\n</style>\n";
+    }
+    
+    if(not defined $ExternJs) {
+        $Head .= "<script type=\"text/javascript\" language=\"JavaScript\">\n<!--\n$Scripts\n-->\n</script>\n";
+    }
+    
+    $Head .= "</head>\n";
+    
+    $Head=~s/\n    /\n/g;
+    
+    return $Head;
 }
 
 sub insertIDs($)
@@ -6549,7 +6601,7 @@ sub readArchive($$)
     if(not $JarCmd) {
         exitStatus("Not_Found", "can't find \"jar\" command");
     }
-    my $ExtractPath = "$TMP_DIR/".($ExtractCounter++);
+    my $ExtractPath = "$TMP_DIR/".$ExtractCounter;
     if(-d $ExtractPath) {
         rmtree($ExtractPath);
     }
@@ -6566,15 +6618,15 @@ sub readArchive($$)
         $ClassPath=~s/\.class\Z//g;
         my $ClassName = get_filename($ClassPath);
         next if($ClassName=~/\$\d/);
-        $ClassPath = cut_path_prefix($ClassPath, $TMP_DIR); # javap decompiler accepts relative paths only
+        $ClassPath = cut_path_prefix($ClassPath, $ExtractPath); # javap decompiler accepts relative paths only
         
-        my $RelPath = cut_path_prefix(get_dirname($ClassPath), $ExtractPath);
-        if($RelPath=~/\./)
+        my $ClassDir = get_dirname($ClassPath);
+        if($ClassDir=~/\./)
         { # jaxb-osgi.jar/1.0/org/apache
             next;
         }
         
-        my $Package = get_PFormat($RelPath);
+        my $Package = get_PFormat($ClassDir);
         if($LibVersion)
         {
             if(skip_package($Package, $LibVersion))
@@ -6587,7 +6639,7 @@ sub readArchive($$)
         push(@Classes, $ClassPath);
         
         if($LibVersion) {
-            $LibClasses{$LibVersion}{$ClassName} = $Package;
+            $LibClasses{$LibVersion}{$ClassName} = 1;
         }
     }
     
@@ -6604,6 +6656,8 @@ sub readArchive($$)
         }
     }
     
+    $ExtractCounter+=1;
+    
     if($LibVersion)
     {
         foreach my $SubArchive (cmd_find($ExtractPath,"","*\.jar",""))
@@ -6611,6 +6665,8 @@ sub readArchive($$)
             readArchive($LibVersion, $SubArchive);
         }
     }
+    
+    rmtree($ExtractPath);
 }
 
 sub native_path($)
@@ -6706,13 +6762,15 @@ sub readClasses_Usage($)
     if(not $JavapCmd) {
         exitStatus("Not_Found", "can't find \"javap\" command");
     }
+    
     my $Input = join(" ", @{$Paths});
     if($OSgroup ne "windows")
     { # on unix ensure that the system does not try and interpret the $, by escaping it
         $Input=~s/\$/\\\$/g;
     }
-    chdir($TMP_DIR);
-    open(CONTENT, "$JavapCmd -c -private $Input |");
+    
+    chdir($TMP_DIR."/".$ExtractCounter);
+    open(CONTENT, "$JavapCmd -c -private $Input 2>\"$TMP_DIR/warn\" |");
     while(<CONTENT>)
     {
         if(/\/\/\s*(Method|InterfaceMethod)\s+(.+)\Z/) {
@@ -6725,7 +6783,7 @@ sub readClasses_Usage($)
                 $UsedFields_Client{$FieldName} = $1;
             }
         }
-        elsif(/ ([^\s]+) [^:]+\(([^()]+)\)/)
+        elsif(/ ([^\s]+) [^: ]+\(([^()]+)\)/)
         {
             my ($Ret, $Params) = ($1, $2);
             
@@ -6768,32 +6826,39 @@ sub readClasses($$$)
     if(not $JavapCmd) {
         exitStatus("Not_Found", "can't find \"javap\" command");
     }
+    
     my $Input = join(" ", @{$Paths});
     if($OSgroup ne "windows")
     { # on unix ensure that the system does not try and interpret the $, by escaping it
         $Input=~s/\$/\\\$/g;
     }
+    
     my $Output = $TMP_DIR."/class-dump.txt";
     if(-e $Output) {
         unlink($Output);
     }
+    
     my $Cmd = "$JavapCmd -s -private";
     if(not $Quick) {
         $Cmd .= " -c -verbose";
     }
-    chdir($TMP_DIR);
+    
+    chdir($TMP_DIR."/".$ExtractCounter);
     system($Cmd." ".$Input." >\"$Output\" 2>\"$TMP_DIR/warn\"");
     chdir($ORIG_DIR);
+    
     if(not -e $Output) {
         exitStatus("Error", "internal error in parser, try to reduce ARG_MAX");
     }
     if($Debug) {
         appendFile($DEBUG_PATH{$LibVersion}."/class-dump.txt", readFile($Output));
     }
+    
     # ! private info should be processed
     open(CONTENT, "$TMP_DIR/class-dump.txt");
     my @Content = <CONTENT>;
     close(CONTENT);
+    
     my (%TypeAttr, $CurrentMethod, $CurrentPackage, $CurrentClass) = ();
     my ($InParamTable, $InExceptionTable, $InCode) = (0, 0, 0);
     
@@ -7595,7 +7660,7 @@ sub read_API_Dump($$)
             if($MethodInfo{$LibVersion}{$Method}{"Abstract"}) {
                 $Class_AbstractMethods{$LibVersion}{get_TypeName($ClassId, $LibVersion)}{$Method} = 1;
             }
-            $LibClasses{$LibVersion}{get_ShortName($ClassId, $LibVersion)} = $MethodInfo{$LibVersion}{$Method}{"Package"};
+            $LibClasses{$LibVersion}{get_ShortName($ClassId, $LibVersion)} = 1;
         }
     }
     
