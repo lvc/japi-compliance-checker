@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 ###########################################################################
-# Java API Compliance Checker (JAPICC) 1.6
+# Java API Compliance Checker (JAPICC) 1.7
 # A tool for checking backward compatibility of a Java library API
 #
 # Written by Andrey Ponomarenko
@@ -46,7 +46,7 @@ use Data::Dumper;
 use Digest::MD5 qw(md5_hex);
 use Config;
 
-my $TOOL_VERSION = "1.6";
+my $TOOL_VERSION = "1.7";
 my $API_DUMP_VERSION = "2.0";
 my $API_DUMP_MAJOR = majorVersion($API_DUMP_VERSION);
 
@@ -2234,39 +2234,38 @@ sub findMethod($$$$)
     my ($Method, $MethodVersion, $ClassName, $ClassVersion) = @_;
     my $ClassId = $TName_Tid{$ClassVersion}{$ClassName};
     
-    if(not $ClassId) {
-        return "";
-    }
-    
-    my @Search = ();
-    if(get_TypeType($ClassId, $ClassVersion) eq "class")
+    if($ClassId)
     {
-        if(my $SuperClassId = $TypeInfo{$ClassVersion}{$ClassId}{"SuperClass"}) {
-            push(@Search, $SuperClassId);
-        }
-    }
-    
-    if(not defined $MethodInfo{$MethodVersion}{$Method}
-    or $MethodInfo{$MethodVersion}{$Method}{"Abstract"})
-    {
-        if(my @SuperInterfaces = sort keys(%{$TypeInfo{$ClassVersion}{$ClassId}{"SuperInterface"}})) {
-            push(@Search, @SuperInterfaces);
-        }
-    }
-    
-    foreach my $SuperId (@Search)
-    {
-        if($SuperId eq $ClassId) {
-            next;
+        my @Search = ();
+        if(get_TypeType($ClassId, $ClassVersion) eq "class")
+        {
+            if(my $SuperClassId = $TypeInfo{$ClassVersion}{$ClassId}{"SuperClass"}) {
+                push(@Search, $SuperClassId);
+            }
         }
         
-        my $SuperName = get_TypeName($SuperId, $ClassVersion);
-        
-        if(my $MethodInClass = findMethod_Class($Method, $SuperName, $ClassVersion)) {
-            return $MethodInClass;
+        if(not defined $MethodInfo{$MethodVersion}{$Method}
+        or $MethodInfo{$MethodVersion}{$Method}{"Abstract"})
+        {
+            if(my @SuperInterfaces = sort keys(%{$TypeInfo{$ClassVersion}{$ClassId}{"SuperInterface"}})) {
+                push(@Search, @SuperInterfaces);
+            }
         }
-        elsif(my $MethodInSuperClasses = findMethod($Method, $MethodVersion, $SuperName, $ClassVersion)) {
-            return $MethodInSuperClasses;
+        
+        foreach my $SuperId (@Search)
+        {
+            if($SuperId eq $ClassId) {
+                next;
+            }
+            
+            my $SuperName = get_TypeName($SuperId, $ClassVersion);
+            
+            if(my $MethodInClass = findMethod_Class($Method, $SuperName, $ClassVersion)) {
+                return $MethodInClass;
+            }
+            elsif(my $MethodInSuperClasses = findMethod($Method, $MethodVersion, $SuperName, $ClassVersion)) {
+                return $MethodInSuperClasses;
+            }
         }
     }
     
@@ -2342,13 +2341,16 @@ sub mergeMethods()
             next;
         }
         next if(not methodFilter($Method, 1));
-        $CheckedMethods{$Method}=1;
+        
         my $ClassId1 = $MethodInfo{1}{$Method}{"Class"};
         my %Class1 = get_Type($ClassId1, 1);
         if($Class1{"Access"}=~/private/)
         {# skip private classes
             next;
         }
+        
+        $CheckedMethods{$Method} = 1;
+        
         my %Class2 = get_Type($MethodInfo{2}{$Method}{"Class"}, 2);
         if(not $MethodInfo{1}{$Method}{"Static"}
         and $Class1{"Type"} eq "class" and not $Class_Constructed{1}{$ClassId1})
@@ -6887,6 +6889,9 @@ sub readClasses($$$)
             next;
         }
         
+        $LINE=~s/ \$(\w)/ $1/g;
+        $LINE_N=~s/ \$(\w)/ $1/g;
+        
         if(not $InParamTable)
         {
             if($LINE=~/ \$/) {
@@ -7368,7 +7373,8 @@ sub detectAdded()
 {
     foreach my $Method (keys(%{$MethodInfo{2}}))
     {
-        if(not defined $MethodInfo{1}{$Method}) {
+        if(not defined $MethodInfo{1}{$Method})
+        {
             if($MethodInfo{2}{$Method}{"Access"}=~/private/)
             { # non-public methods
                 next;
@@ -7434,7 +7440,7 @@ sub detectRemoved()
                 next;
             }
             $CheckedMethods{$Method} = 1;
-            if(not $MethodInfo{1}{$Method}{"Constructor"} and $TName_Tid{2}{$Class{"Name"}}
+            if(not $MethodInfo{1}{$Method}{"Constructor"}
             and my $MovedUp = findMethod($Method, 1, $Class{"Name"}, 2))
             {
                 if(get_TypeType($ClassId, 1) eq "class"
