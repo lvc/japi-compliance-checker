@@ -8,8 +8,8 @@ All rights reserved.
 RELEASE INFORMATION
 
 Project:           Java API Compliance Checker (JAPICC)
-Version:           1.6
-Date:              2016-04-08
+Version:           1.7
+Date:              2016-04-14
 
 
 This file explains how to install and setup environment
@@ -28,7 +28,7 @@ Content:
 1. REQUIREMENTS FOR LINUX, FREEBSD and MAC OS X
 ===============================================
 
-   1. JDK - development files (javap, javac)
+   1. JDK or OpenJDK - development files (javap, javac)
    2. Perl 5 (5.8 or newer)
 
 
@@ -36,7 +36,7 @@ Content:
 2. REQUIREMENTS FOR MS WINDOWS
 ==============================
 
-   1. JDK (javap, javac)
+   1. JDK or OpenJDK (javap, javac)
    2. Active Perl 5 (5.8 or newer)
 
 

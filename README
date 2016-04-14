@@ -3,13 +3,15 @@ NAME:
   
   The tool checks classes declarations of old and new versions and analyzes changes that may break compatibility: removed methods, removed class fields, added abstract methods, etc. The tool is intended for developers of software libraries and Linux maintainers who are interested in ensuring backward compatibility.
   
+  The Scala language is supported since 1.7 version of the tool.
+  
   The tool is developed by Andrey Ponomarenko: http://abi-laboratory.pro/
 
 INSTALL:
   sudo make install prefix=/usr
 
 REQUIRES:
-  JDK - development files
+  JDK or OpenJDK - development files
   Perl 5
 
 USAGE:

@@ -15,11 +15,11 @@
 # REQUIREMENTS
 # ============
 #  Linux, FreeBSD, Mac OS X
-#    - JDK - development files (javap, javac)
+#    - JDK or OpenJDK - development files (javap, javac)
 #    - Perl 5 (5.8 or newer)
 #
 #  MS Windows
-#    - JDK (javap, javac)
+#    - JDK or OpenJDK (javap, javac)
 #    - Active Perl 5 (5.8 or newer)
 #  
 # This program is free software: you can redistribute it and/or modify
@@ -55,10 +55,11 @@ $TestSystem, $DumpAPI, $ClassListPath, $ClientPath, $StrictCompat,
 $DumpVersion, $BinaryOnly, $TargetTitle, %TargetVersion, $SourceOnly,
 $ShortMode, $KeepInternal, $OutputReportPath, $BinaryReportPath,
 $SourceReportPath, $Debug, $Quick, $SortDump, $SkipDeprecated, $SkipClassesList,
-$ShowAccess, $AffectLimit, $JdkPath, $SkipInternal, $HideTemplates,
+$ShowAccess, $AffectLimit, $JdkPath, $SkipInternalPackages, $HideTemplates,
 $HidePackages, $ShowPackages, $Minimal, $AnnotationsListPath,
 $SkipPackagesList, $OutputDumpPath, $AllAffected, $Compact,
-$SkipAnnotationsListPath, $ExternCss, $ExternJs);
+$SkipAnnotationsListPath, $ExternCss, $ExternJs, $SkipInternalTypes,
+$AddedAnnotations, $RemovedAnnotations, $CountMethods);
 
 my $CmdName = get_filename($0);
 my $OSgroup = get_OSgroup();
@@ -149,7 +150,8 @@ GetOptions("h|help!" => \$Help,
   "v2|version2=s" => \$TargetVersion{2},
   "s|strict!" => \$StrictCompat,
   "keep-internal!" => \$KeepInternal,
-  "skip-internal=s" => \$SkipInternal,
+  "skip-internal-packages|skip-internal=s" => \$SkipInternalPackages,
+  "skip-internal-types=s" => \$SkipInternalTypes,
   "dump|dump-api=s" => \$DumpAPI,
   "classes-list=s" => \$ClassListPath,
   "annotations-list=s" => \$AnnotationsListPath,
@@ -169,6 +171,9 @@ GetOptions("h|help!" => \$Help,
   "hide-templates!" => \$HideTemplates,
   "show-packages!" => \$ShowPackages,
   "compact!" => \$Compact,
+  "added-annotations!" => \$AddedAnnotations,
+  "removed-annotations!" => \$RemovedAnnotations,
+  "count-methods=s" => \$CountMethods,
 # other options
   "test!" => \$TestSystem,
   "debug!" => \$Debug,
@@ -324,10 +329,13 @@ EXTRA OPTIONS:
         *impl*
         *internal*
         *examples*
-
-  -skip-internal PATTERN
-      Do not check internal packages matched by the pattern.
-      
+  
+  -skip-internal-packages PATTERN
+      Do not check packages matched by the pattern.
+  
+  -skip-internal-types PATTERN
+      Do not check types (classes and interfaces) matched by the pattern.
+  
   -dump|-dump-api PATH
       Dump library API to gzipped TXT format file. You can transfer it
       anywhere and pass instead of the descriptor. Also it may be used
@@ -410,6 +418,15 @@ EXTRA OPTIONS:
   -compact
       Try to simplify formatting and reduce size of the report (for a big
       set of changes).
+  
+  -added-annotations
+      Apply filters by annotations only to new version of the library.
+  
+  -removed-annotations
+      Apply filters by annotations only to old version of the library.
+  
+  -count-methods PATH
+      Count total methods in the API dump.
 
 OTHER OPTIONS:
   -test
@@ -1189,16 +1206,29 @@ sub mergeClasses()
         next if(not $ClassName);
         my $Type1_Id = $TName_Tid{1}{$ClassName};
         my %Type1 = get_Type($Type1_Id, 1);
+        
+        if($Type1{"Type"}!~/class|interface/) {
+            next;
+        }
+        
         if(defined $Type1{"Access"}
         and $Type1{"Access"}=~/private/) {
             next;
         }
+        
+        if(not classFilter(\%Type1, 1, 0)) {
+            next;
+        }
+        
         my $Type2_Id = $TName_Tid{2}{$ClassName};
         if(not $Type2_Id)
         { # classes and interfaces with public methods
             foreach my $Method (keys(%{$Class_Methods{1}{$ClassName}}))
             {
-                next if(not methodFilter($Method, 1));
+                if(not methodFilter($Method, 1)) {
+                    next;
+                }
+                
                 $CheckedTypes{$ClassName} = 1;
                 $CheckedMethods{$Method} = 1;
                 
@@ -1214,6 +1244,7 @@ sub mergeClasses()
                         "Type_Name"=>$ClassName,
                         "Target"=>$ClassName  );
                 }
+                
                 $ReportedRemoved{$ClassName} = 1;
             }
         }
@@ -1223,8 +1254,16 @@ sub mergeClasses()
     {
         my %Class1 = get_Type($Class_Id, 1);
         
+        if($Class1{"Type"}!~/class|interface/) {
+            next;
+        }
+        
         if(defined $Class1{"Access"}
         and $Class1{"Access"}=~/private/) {
+            next;
+        }
+        
+        if(not classFilter(\%Class1, 1, 1)) {
             next;
         }
         
@@ -1236,17 +1275,20 @@ sub mergeClasses()
             {
                 my %Class2 = get_Type($Class2_Id, 2);
                 
-                if($Class1{"Type"}=~/class|interface/)
+                foreach my $Field (keys(%{$Class1{"Fields"}}))
                 {
-                    foreach my $Field (keys(%{$Class1{"Fields"}}))
+                    my $FieldInfo = $Class1{"Fields"}{$Field};
+                    
+                    my $FAccess = $FieldInfo->{"Access"};
+                    if($FAccess=~/private/) {
+                        next;
+                    }
+                    
+                    if($FieldInfo->{"Static"})
                     {
-                        my $FieldInfo = $Class1{"Fields"}{$Field};
-                        my $FAccess = $FieldInfo->{"Access"};
-                        if($FAccess=~/private/) {
-                            next;
-                        }
+                        $CheckedTypes{$ClassName} = 1;
                         
-                        if($FieldInfo->{"Static"} and not defined $Class2{"Fields"}{$Field})
+                        if(not defined $Class2{"Fields"}{$Field})
                         {
                             %{$CompatProblems{".client_method"}{"Removed_NonConstant_Field"}{$Field}}=(
                                 "Target"=>$Field,
@@ -1270,12 +1312,12 @@ sub mergeClasses()
             if(not defined $Class_Methods{1}{$ClassName})
             {
                 # classes and interfaces with public static fields
-                if($Class1{"Type"}=~/class|interface/
-                and not $ReportedRemoved{$ClassName})
+                if(not defined $ReportedRemoved{$ClassName})
                 {
                     foreach my $Field (keys(%{$Class1{"Fields"}}))
                     {
                         my $FieldInfo = $Class1{"Fields"}{$Field};
+                        
                         my $FAccess = $FieldInfo->{"Access"};
                         if($FAccess=~/private/) {
                             next;
@@ -1283,6 +1325,8 @@ sub mergeClasses()
                         
                         if($FieldInfo->{"Static"})
                         {
+                            $CheckedTypes{$ClassName} = 1;
+                            
                             if($Class1{"Type"} eq "class")
                             {
                                 %{$CompatProblems{".client_method"}{"Removed_Class"}{"this"}} = (
@@ -1451,7 +1495,10 @@ sub mergeTypes($$)
     return {} if(not $Type1{"Name"} or not $Type2{"Name"});
     return {} if(not $Type1{"Archive"} or not $Type2{"Archive"});
     return {} if($Type1{"Name"} ne $Type2{"Name"});
-    return {} if(skip_package($Type1{"Package"}, 1));
+    
+    if(not classFilter(\%Type1, 1, 0)) {
+        return {};
+    }
     
     $CheckedTypes{$Type1{"Name"}} = 1;
     
@@ -2060,26 +2107,76 @@ sub get_Type($$)
     return %{$TypeInfo{$LibVersion}{$TypeId}};
 }
 
-sub methodFilter($$)
+sub classFilter($$$)
 {
-    my ($Method, $LibVersion) = @_;
-    my $ClassId = $MethodInfo{$LibVersion}{$Method}{"Class"};
-    my %Class = get_Type($ClassId, $LibVersion);
-    my $Package = $MethodInfo{$LibVersion}{$Method}{"Package"};
+    my ($Class, $LibVersion, $ClassContext) = @_;
     
-    my @Ann = ();
+    my $CName = $Class->{"Name"};
+    my $Package = $Class->{"Package"};
     
-    if(defined $Class{"Annotations"}) {
-        @Ann = (@Ann, keys(%{$Class{"Annotations"}}));
+    if(defined $ClassListPath
+    and not defined $ClassList_User{$CName})
+    { # user defined classes
+        return 0;
     }
     
-    if(defined $MethodInfo{$LibVersion}{$Method}{"Annotations"}) {
-        @Ann = (@Ann, keys(%{$MethodInfo{$LibVersion}{$Method}{"Annotations"}}));
+    if(defined $SkipClassesList
+    and defined $SkipClasses{$CName})
+    { # user defined classes
+        return 0;
+    }
+    
+    if(skipPackage($Package, $LibVersion))
+    { # internal packages
+        return 0;
+    }
+    
+    if(skipType($CName))
+    { # internal types
+        return 0;
+    }
+    
+    if($ClassContext)
+    {
+        my @Ann = ();
+        
+        if(defined $Class->{"Annotations"}) {
+            @Ann = keys(%{$Class->{"Annotations"}});
+        }
+        
+        if(not annotationFilter(\@Ann, $LibVersion)) {
+            return 0;
+        }
+        
+        if($ClientPath)
+        {
+            if(not defined $UsedClasses_Client{$CName}) {
+                return 0;
+            }
+        }
+    }
+    
+    return 1;
+}
+
+sub annotationFilter($$)
+{
+    my ($Ann, $LibVersion) = @_;
+    
+    if(not defined $CountMethods)
+    {
+        if(defined $AddedAnnotations and $LibVersion==1) {
+            return 1;
+        }
+        
+        if(defined $RemovedAnnotations and $LibVersion==2) {
+            return 1;
+        }
     }
     
     if($SkipAnnotationsListPath)
     {
-        foreach my $Aid (@Ann)
+        foreach my $Aid (@{$Ann})
         {
             my $AName = $TypeInfo{$LibVersion}{$Aid}{"Name"};
             
@@ -2093,7 +2190,7 @@ sub methodFilter($$)
     {
         my $Annotated = 0;
         
-        foreach my $Aid (@Ann)
+        foreach my $Aid (@{$Ann})
         {
             my $AName = $TypeInfo{$LibVersion}{$Aid}{"Name"};
             
@@ -2109,28 +2206,56 @@ sub methodFilter($$)
         }
     }
     
-    if($ClassListPath
-    and not $ClassList_User{$Class{"Name"}})
-    { # user defined classes
+    return 1;
+}
+
+sub methodFilter($$)
+{
+    my ($Method, $LibVersion) = @_;
+    
+    if($MethodInfo{$LibVersion}{$Method}{"Access"}=~/private/)
+    { # non-public
         return 0;
     }
     
-    if($SkipClassesList
-    and $SkipClasses{$Class{"Name"}})
-    { # user defined classes
+    my $ClassId = $MethodInfo{$LibVersion}{$Method}{"Class"};
+    my %Class = get_Type($ClassId, $LibVersion);
+    
+    if($Class{"Access"}=~/private/)
+    { # skip private classes
+        return 0;
+    }
+    
+    my $Package = $MethodInfo{$LibVersion}{$Method}{"Package"};
+    
+    my @Ann = ();
+    
+    if(defined $Class{"Annotations"}) {
+        @Ann = (@Ann, keys(%{$Class{"Annotations"}}));
+    }
+    
+    if(defined $MethodInfo{$LibVersion}{$Method}{"Annotations"}) {
+        @Ann = (@Ann, keys(%{$MethodInfo{$LibVersion}{$Method}{"Annotations"}}));
+    }
+    
+    if(not annotationFilter(\@Ann, $LibVersion)) {
         return 0;
     }
     
     if($ClientPath)
     { # user defined application
-        if(not $UsedMethods_Client{$Method}
-        and not $UsedClasses_Client{$Class{"Name"}}) {
+        if(not defined $UsedMethods_Client{$Method}
+        and not defined $UsedClasses_Client{$Class{"Name"}}) {
             return 0;
         }
     }
     
-    if(skip_package($Package, $LibVersion))
+    if(skipPackage($Package, $LibVersion))
     { # internal packages
+        return 0;
+    }
+    
+    if(not classFilter(\%Class, $LibVersion, 0)) {
         return 0;
     }
     
@@ -2149,23 +2274,40 @@ sub methodFilter($$)
     return 1;
 }
 
-sub skip_package($$)
+sub skipType($)
 {
-    my ($Package, $LibVersion) = @_;
-    return 0 if(not $Package);
+    my $TName = $_[0];
     
-    if(defined $SkipInternal)
-    { # --skip-internal=PATTERN
-        if($Package=~/($SkipInternal)/) {
+    if(defined $SkipInternalTypes)
+    {
+        if($TName=~/($SkipInternalTypes)/) {
             return 1;
         }
     }
     
-    foreach my $SkipPackage (keys(%{$SkipPackages{$LibVersion}}))
+    return 0;
+}
+
+sub skipPackage($$)
+{
+    my ($Package, $LibVersion) = @_;
+    return 0 if(not $Package);
+    
+    if(defined $SkipInternalPackages)
     {
-        if($Package=~/(\A|\.)\Q$SkipPackage\E(\.|\Z)/)
-        { # user skipped packages
+        if($Package=~/($SkipInternalPackages)/) {
             return 1;
+        }
+    }
+    
+    if(defined $SkipPackages{$LibVersion})
+    {
+        foreach my $SkipPackage (keys(%{$SkipPackages{$LibVersion}}))
+        {
+            if($Package=~/(\A|\.)\Q$SkipPackage\E(\.|\Z)/)
+            { # user skipped packages
+                return 1;
+            }
         }
     }
     
@@ -2173,16 +2315,6 @@ sub skip_package($$)
     {
         my $Note = (not keys %SkippedPackage)?" (use --keep-internal option to check them)":"";
         
-        # if($Package=~/\A(com\.oracle|com\.sun|COM\.rsa|sun|sunw)(\.|\Z)/)
-        # { # private packages
-        #   # http://java.sun.com/products/jdk/faq/faq-sun-packages.html
-        #     if(not $SkippedPackage{$LibVersion}{$1})
-        #     {
-        #         $SkippedPackage{$LibVersion}{$1} = 1;
-        #         printMsg("WARNING", "skip \"$1\" packages".$Note);
-        #     }
-        #     return 1;
-        # }
         if($Package=~/(\A|\.)(internal|impl|examples)(\.|\Z)/)
         { # internal packages
             if(not $SkippedPackage{$LibVersion}{$2})
@@ -2194,7 +2326,8 @@ sub skip_package($$)
         }
     }
     
-    if(my @Keeped = keys(%{$KeepPackages{$LibVersion}}))
+    if(defined $KeepPackages{$LibVersion}
+    and my @Keeped = keys(%{$KeepPackages{$LibVersion}}))
     {
         my $UserKeeped = 0;
         foreach my $KeepPackage (@Keeped)
@@ -2208,6 +2341,7 @@ sub skip_package($$)
             return 1;
         }
     }
+    
     return 0;
 }
 
@@ -2283,7 +2417,7 @@ sub findMethod($$$$)
         }
     }
     
-    return "";
+    return undef;
 }
 
 sub findMethod_Class($$$)
@@ -2293,7 +2427,7 @@ sub findMethod_Class($$$)
     my $TargetShortName = get_MShort($Method);
     
     if(not defined $Class_Methods{$ClassVersion}{$ClassName}) {
-        return "";
+        return undef;
     }
     
     foreach my $Candidate (sort keys(%{$Class_Methods{$ClassVersion}{$ClassName}}))
@@ -2307,7 +2441,7 @@ sub findMethod_Class($$$)
         }
     }
     
-    return "";
+    return undef;
 }
 
 sub prepareMethods($)
@@ -2332,23 +2466,20 @@ sub mergeMethods()
     foreach my $Method (sort keys(%{$MethodInfo{1}}))
     { # compare methods
         next if(not defined $MethodInfo{2}{$Method});
+        
         if(not $MethodInfo{1}{$Method}{"Archive"}
         or not $MethodInfo{2}{$Method}{"Archive"}) {
             next;
         }
-        if($MethodInfo{1}{$Method}{"Access"}=~/private/)
-        { # skip private methods
+        
+        if(not methodFilter($Method, 1)) {
             next;
         }
-        next if(not methodFilter($Method, 1));
         
         my $ClassId1 = $MethodInfo{1}{$Method}{"Class"};
         my %Class1 = get_Type($ClassId1, 1);
-        if($Class1{"Access"}=~/private/)
-        {# skip private classes
-            next;
-        }
         
+        $CheckedTypes{$Class1{"Name"}} = 1;
         $CheckedMethods{$Method} = 1;
         
         my %Class2 = get_Type($MethodInfo{2}{$Method}{"Class"}, 2);
@@ -3378,8 +3509,7 @@ sub get_Summary($)
     $T_Problems_Low = get_TypeProblems_Count("Low", $Level);
     $T_Other = get_TypeProblems_Count("Safe", $Level);
     
-    # changed and removed public symbols
-    my $SCount = keys(%CheckedMethods);
+    my $SCount = keys(%CheckedMethods)-$Added;
     if($SCount)
     {
         my %Weight = (
@@ -3428,7 +3558,7 @@ sub get_Summary($)
     $Checked_Archives_Link = "<a href='#Checked_Archives' style='color:Blue;'>".keys(%{$LibArchives{1}})."</a>" if(keys(%{$LibArchives{1}})>0);
     
     $TestResults .= "<tr><th>Total JARs</th><td>$Checked_Archives_Link</td></tr>\n";
-    $TestResults .= "<tr><th>Total Methods / Classes</th><td>".keys(%CheckedMethods)." / ".keys(%{$LibClasses{1}})."</td></tr>\n"; # keys(%CheckedTypes)
+    $TestResults .= "<tr><th>Total Methods / Classes</th><td>".keys(%CheckedMethods)." / ".keys(%CheckedTypes)."</td></tr>\n"; # keys(%{$LibClasses{1}})
     
     $RESULT{$Level}{"Problems"} += $Removed+$M_Problems_High+$T_Problems_High+$T_Problems_Medium+$M_Problems_Medium;
     if($StrictCompat) {
@@ -3554,6 +3684,8 @@ sub get_Summary($)
         my $MS_Link = "<a href='#".get_Anchor("Method", $Level, "Safe")."' style='color:Blue;'>$M_Other</a>";
         $Problem_Summary .= "<tr><th>Other Changes<br/>in Methods</th><td>-</td><td".getStyle("M", "S", $M_Other).">$MS_Link</td></tr>\n";
     }
+    $META_DATA .= "checked_methods:".keys(%CheckedMethods).";";
+    $META_DATA .= "checked_types:".keys(%CheckedTypes).";";
     $META_DATA .= "tool_version:$TOOL_VERSION";
     $Problem_Summary .= "</table>\n";
     return ($TestInfo.$TestResults.$Problem_Summary, $META_DATA);
@@ -3634,9 +3766,13 @@ sub get_Report_Added($)
             foreach my $Method (keys(%{$MethodAddedInArchiveClass{$ArchiveName}{$ClassName}})) {
                 $NameSpace_Method{$MethodInfo{2}{$Method}{"Package"}}{$Method} = 1;
             }
+            
+            my $ShowClass = $ClassName;
+            $ShowClass=~s/<.*>//g;
+            
             foreach my $NameSpace (sort keys(%NameSpace_Method))
             {
-                $ADDED_METHODS .= "<span class='jar'>$ArchiveName</span>, <span class='cname'>".htmlSpecChars($ClassName).".class</span><br/>\n";
+                $ADDED_METHODS .= "<span class='jar'>$ArchiveName</span>, <span class='cname'>".htmlSpecChars($ShowClass).".class</span><br/>\n";
                 
                 if($NameSpace) {
                     $ADDED_METHODS .= "<span class='pkg_t'>package</span> <span class='pkg'>$NameSpace</span><br/>\n";
@@ -3728,9 +3864,13 @@ sub get_Report_Removed($)
             {
                 $NameSpace_Method{$MethodInfo{1}{$Method}{"Package"}}{$Method} = 1;
             }
+            
+            my $ShowClass = $ClassName;
+            $ShowClass=~s/<.*>//g;
+            
             foreach my $NameSpace (sort keys(%NameSpace_Method))
             {
-                $REMOVED_METHODS .= "<span class='jar'>$ArchiveName</span>, <span class='cname'>".htmlSpecChars($ClassName).".class</span><br/>\n";
+                $REMOVED_METHODS .= "<span class='jar'>$ArchiveName</span>, <span class='cname'>".htmlSpecChars($ShowClass).".class</span><br/>\n";
                 
                 if($NameSpace) {
                     $REMOVED_METHODS .= "<span class='pkg_t'>package</span> <span class='pkg'>$NameSpace</span><br/>\n";
@@ -3825,9 +3965,13 @@ sub get_Report_MethodProblems($$)
             foreach my $Method (keys(%{$ReportMap{$ArchiveName}{$ClassName}})) {
                 $NameSpace_Method{$MethodInfo{1}{$Method}{"Package"}}{$Method} = 1;
             }
+            
+            my $ShowClass = $ClassName;
+            $ShowClass=~s/<.*>//g;
+            
             foreach my $NameSpace (sort keys(%NameSpace_Method))
             {
-                $METHOD_PROBLEMS .= "<span class='jar'>$ArchiveName</span>, <span class='cname'>$ClassName.class</span><br/>\n";
+                $METHOD_PROBLEMS .= "<span class='jar'>$ArchiveName</span>, <span class='cname'>".htmlSpecChars($ShowClass).".class</span><br/>\n";
                 if($NameSpace) {
                     $METHOD_PROBLEMS .= "<span class='pkg_t'>package</span> <span class='pkg'>$NameSpace</span><br/>\n";
                 }
@@ -6631,7 +6775,7 @@ sub readArchive($$)
         my $Package = get_PFormat($ClassDir);
         if($LibVersion)
         {
-            if(skip_package($Package, $LibVersion))
+            if(skipPackage($Package, $LibVersion))
             { # internal packages
                 next;
             }
@@ -6775,8 +6919,17 @@ sub readClasses_Usage($)
     open(CONTENT, "$JavapCmd -c -private $Input 2>\"$TMP_DIR/warn\" |");
     while(<CONTENT>)
     {
-        if(/\/\/\s*(Method|InterfaceMethod)\s+(.+)\Z/) {
-            $UsedMethods_Client{$2} = 1;
+        if(/\/\/\s*(Method|InterfaceMethod)\s+(.+)\Z/)
+        {
+            my $M = $2;
+            $UsedMethods_Client{$M} = 1;
+            
+            if($M=~/\A(.*)+\.\w+\:\(/)
+            {
+                my $C = $1;
+                $C=~s/\//./g;
+                $UsedClasses_Client{$C} = 1;
+            }
         }
         elsif(/\/\/\s*Field\s+(.+)\Z/)
         {
@@ -6889,8 +7042,8 @@ sub readClasses($$$)
             next;
         }
         
-        $LINE=~s/ \$(\w)/ $1/g;
-        $LINE_N=~s/ \$(\w)/ $1/g;
+        # $LINE=~s/ \$(\w)/ $1/g;
+        # $LINE_N=~s/ \$(\w)/ $1/g;
         
         if(not $InParamTable)
         {
@@ -6906,7 +7059,8 @@ sub readClasses($$$)
         {
             $CurrentMethod = undef;
             $InCode = 0;
-            $InAnnotations_Method = 0
+            $InAnnotations_Method = 0;
+            $InParamTable = 0;
         }
         
         if($LINE eq "}\n") {
@@ -7375,18 +7529,16 @@ sub detectAdded()
     {
         if(not defined $MethodInfo{1}{$Method})
         {
-            if($MethodInfo{2}{$Method}{"Access"}=~/private/)
-            { # non-public methods
+            if(not methodFilter($Method, 2)) {
                 next;
             }
-            next if(not methodFilter($Method, 2));
+            
             my $ClassId = $MethodInfo{2}{$Method}{"Class"};
             my %Class = get_Type($ClassId, 2);
-            if($Class{"Access"}=~/private/)
-            { # non-public classes
-                next;
-            }
+            
+            $CheckedTypes{$Class{"Name"}} = 1;
             $CheckedMethods{$Method} = 1;
+            
             if(not $MethodInfo{2}{$Method}{"Constructor"}
             and my $Overridden = findMethod($Method, 2, $Class{"Name"}, 2))
             {
@@ -7415,6 +7567,7 @@ sub detectAdded()
                     { # return value type changed from "void" to 
                         $ChangedReturnFromVoid{$VoidMethod} = 1;
                         $ChangedReturnFromVoid{$Method} = 1;
+                        
                         %{$CompatProblems{$VoidMethod}{"Changed_Method_Return_From_Void"}{""}}=(
                             "New_Value"=>get_TypeName($MethodInfo{2}{$Method}{"Return"}, 2)
                         );
@@ -7431,15 +7584,16 @@ sub detectRemoved()
     {
         if(not defined $MethodInfo{2}{$Method})
         {
-            next if($MethodInfo{1}{$Method}{"Access"}=~/private/);
-            next if(not methodFilter($Method, 1));
-            my $ClassId = $MethodInfo{1}{$Method}{"Class"};
-            my %Class = get_Type($ClassId, 1);
-            if($Class{"Access"}=~/private/)
-            {# non-public classes
+            if(not methodFilter($Method, 1)) {
                 next;
             }
+            
+            my $ClassId = $MethodInfo{1}{$Method}{"Class"};
+            my %Class = get_Type($ClassId, 1);
+            
+            $CheckedTypes{$Class{"Name"}} = 1;
             $CheckedMethods{$Method} = 1;
+            
             if(not $MethodInfo{1}{$Method}{"Constructor"}
             and my $MovedUp = findMethod($Method, 1, $Class{"Name"}, 2))
             {
@@ -8225,7 +8379,7 @@ sub scenario()
         }
     }
     
-    if(not $TargetLibraryName)
+    if(not $TargetLibraryName and not $CountMethods)
     {
         if($DumpAPI)
         {
@@ -8338,6 +8492,24 @@ sub scenario()
             exitStatus("Access_Error", "can't access file \'$ClientPath\'");
         }
     }
+    
+    if($CountMethods)
+    {
+        if(not -e $CountMethods) {
+            exitStatus("Access_Error", "can't access \'$CountMethods\'");
+        }
+        
+        read_API_Dump(1, $CountMethods);
+        
+        my $Count = 0;
+        foreach my $Method (keys(%{$MethodInfo{1}})) {
+            $Count += methodFilter($Method, 1);
+        }
+        
+        printMsg("INFO", $Count);
+        exit(0);
+    }
+    
     if($DumpAPI)
     {
         foreach my $Part (split(/\s*,\s*/, $DumpAPI))
