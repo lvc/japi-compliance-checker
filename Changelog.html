@@ -1,0 +1,519 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <meta name="description" content="Changelog for Java API Compliance Checker" />
+  <title>Java API Compliance Checker: History</title>
+
+  <style type="text/css">
+    body {
+      margin-top: 1.0em;
+      background-color: #deeef7;
+      font-family: Helvetica, Arial, FreeSans, san-serif;
+      color: #000000;
+    }
+    #container {
+      margin: 0 auto;
+      width: 700px;
+    }
+    h1 { font-size: 3.8em; color: #211108; margin-bottom: 3px;margin-top:0px;padding-top:0px;}
+    h1 .small { font-size: 0.4em; }
+    h1 a { text-decoration: none }
+    h2 { font-size: 1.5em; color: #211108; }
+    h3 { text-align: center; color: #211108; }
+    a { color: #211108; }
+    .description { font-size: 1.2em; margin-bottom: 30px; margin-top: 30px; font-style: italic;}
+    .download { float: right; }
+    pre {padding: 0px;margin: 0px;padding-left: 10px;word-wrap:break-word;white-space: pre-wrap;}
+    hr { border: 0; width: 80%; border-bottom: 1px solid #aaa}
+    .footer { text-align:center; padding-top:30px; font-style: italic; }
+    .code {border: dashed 1px gray; background-color: #f0f0f0;}
+    .listing {padding: 10px;border: 1px solid black;width: 70%;font-family:"DejaVu Sans Mono", "Monaco", "Courier New", monospace;font-size:14px;}
+    .summary {border:1px solid black;border-collapse:collapse;}
+    table.summary td, table.summary th {border:1px solid black;padding:2px;}
+  </style>
+
+</head>
+
+<body>
+<a href="https://github.com/lvc/japi-compliance-checker"><img style="position: absolute; top: 0; right: 0; border: 0;" src="http://s3.amazonaws.com/github/ribbons/forkme_right_darkblue_121621.png" alt="Fork me on GitHub" /></a>
+
+<div id="container">
+
+<h1>Java API Compliance<br/>Checker: History</h1>
+<p/>
+<br/>
+
+<b>Version 1.7 (April 14, 2016) </b><br/>
+<b>Improvements</b>
+<ul>
+    <li>
+        Added numbers of checked methods and types to the meta line of the report
+    </li>
+    <li>
+        Skip checking of auto-generated methods
+    </li>
+</ul>
+<b>New Options</b>
+<ul>
+    <li>
+        -skip-internal-types: skip checking of some data types (classes and interfaces)
+    </li>
+    <li>
+        -added-annotations: apply filters by annotations only to new version of the library
+    </li>
+    <li>
+        -count-methods: count methods in the API dump
+    </li>
+</ul>
+<b>Bug Fixes</b>
+<ul>
+    <li>
+        Do not count added methods when calculating compatibility rate
+    </li>
+    <li>
+        Fixed filtering of checked methods and classes
+    </li>
+    <li>
+        Show number of checked classes instead of number of all classes in the report summary
+    </li>
+    <li>
+        Fixed -client option
+    </li>
+    <li>
+        Fixed html formatting in the report
+    </li>
+    <li>
+        Fixed class-file names in the report
+    </li>
+</ul>
+<br/>
+
+<b>Version 1.6 (April 08, 2016)</b><br/>
+<b>Improvements</b>
+<ul>
+    <li>
+        Support for Scala
+    </li>
+    <li>
+        Fixed IDs of API elements (methods and types) in the API dump, requires Digest::MD5 core Perl module
+    </li>
+    <li>
+        Show version of used javac compiler instead of the version of java interpreter in the console output
+    </li>
+    <li>
+        Check annotations of methods
+    </li>
+    <li>
+        Check for removed classes with public static fields and only private constructor
+    </li>
+    <li>
+        Check for removed public static fields in classes with only private constructor
+    </li>
+    <li>
+        Show percentage of affected methods in the problem description
+    </li>
+    <li>
+        Show compatibility rate instead of affect rate in the console output
+    </li>
+    <li>
+        Reduced size of the report
+    </li>
+    <li>
+        Added more unit tests
+    </li>
+</ul>
+<b>New Options</b>
+<ul>
+    <li>
+        -compact: simplify formatting and reduce size of the report for a big set of changes
+    </li>
+    <li>
+        -skip-annotations-list: skip checking of some annotated classes and methods
+    </li>
+    <li>
+        -external-css: generate CSS styles to external file
+    </li>
+    <li>
+        -external-js: generate JS scripts to external file
+    </li>
+</ul>
+<b>Bug Fixes</b>
+<ul>
+    <li>
+        Fixed analysis of deprecated methods and types
+    </li>
+    <li>
+        Fixed detection of methods moved up class hierarchy to java.lang.Object
+    </li>
+    <li>
+        Fixed support for annotations in Java 8
+    </li>
+    <li>
+        Fixed analysis of template types
+    </li>
+    <li>
+        Fixed -short option
+    </li>
+    <li>
+        Fixed -client option
+    </li>
+    <li>
+        Do not skip checking of com.oracle.*, com.sun.*, COM.rsa.*, sun.* and sunw.* packages
+    </li>
+    <li>
+        Fixed problem descriptions in the report
+    </li>
+    <li>
+        Fixed style of the report
+    </li>
+    <li>
+        Added method usage information to an API dump
+    </li>
+    <li>
+        Comparison of API dumps is now equivalent to comparison of JARs
+    </li>
+</ul>
+<br/>
+
+<b>Version 1.5 (March 24, 2016)</b><br/>
+<b>Improvements</b>
+<ul>
+    <li>
+        Up to 100 times faster on big libraries
+    </li>
+    <li>
+        Up to 4 times less RAM usage on big libraries
+    </li>
+    <li>
+        Improved design of the report
+    </li>
+    <li>
+        Replaced verdict with compatibility rate in the report 
+    </li>
+    <li>
+        Implemented check for removed annotations
+    </li>
+    <li>
+        Do not show Java version in the report 
+    </li>
+    <li>
+        Limited number of affected methods shown in the report
+    </li>
+    <li>
+        Do not show package names in the report by default
+    </li>
+    <li>
+        Do not show time stamp in the report 
+    </li>
+    <li>
+        Do not show warning for added class fields 
+    </li>
+    <li>
+        Added Makefile 
+    </li>
+    <li>
+        Removed obsolete options 
+    </li>
+    <li>
+        Reduced size of the report 
+    </li>
+    <li>
+        Allowed api, dump and apidump extensions of API dump 
+    </li>
+    <li>
+        Changed format of API dump
+    </li>
+    <li>
+        Changed console output 
+    </li>
+</ul>
+<b>New Options</b>
+<ul>
+    <li>
+        -skip-packages
+    </li>
+    <li>
+        -dump-path
+    </li>
+</ul>
+<b>Bug Fixes</b>
+<ul>
+    <li>
+        Fixed affect descriptions
+    </li>
+    <li>
+        Fixed issue with API dumps on OS X
+    </li>
+    <li>
+        Fixed -jdk-path option
+    </li>
+    <li>
+        Fixed -limit-affected option
+    </li>
+</ul>
+<br/>
+
+<b>Version 1.4.1 (March 12, 2015)</b><br/>
+<b>Improvements</b>
+<ul>
+    <li>
+        Support for Java 8
+    </li>
+    <li>
+        Support for limiting checking based on annotations (for Apache HBase)
+    </li>
+    <li>
+        Add support for runtime visible annotations
+    </li>
+</ul>
+<b>New Options</b>
+<ul>
+    <li>
+        -minimal
+    </li>
+    <li>
+        -hide-templates
+    </li>
+    <li>
+        -hide-packages
+    </li>
+</ul>
+<b>Bug Fixes</b>
+<ul>
+    <li>
+        Fixed auto-skipping of internal packages
+    </li>
+    <li>
+        Fixed warnings on Solaris
+    </li>
+    <li>
+        Fixed -client option
+    </li>
+</ul>
+<br/>
+
+<b>Version 1.3.7 (April 25, 2014)</b><br/>
+<b>Improvements</b>
+<ul>
+    <li>
+        Show Java version in the report summary
+    </li>
+    <li>
+        Mark deprecated methods in the report
+    </li>
+</ul>
+<b>New Options</b>
+<ul>
+    <li>
+        -jdk-path
+    </li>
+    <li>
+        -skip-internal
+    </li>
+</ul>
+<b>Bug Fixes</b>
+<ul>
+    <li>
+        Improved support for Java 7 templates
+    </li>
+</ul>
+<b>Other</b>
+<ul>
+    <li>
+        Code cleaning
+    </li>
+</ul>
+<br/>
+
+<b>Version 1.3.6 (January 21, 2014)</b><br/>
+<b>Improvements</b>
+<ul>
+    <li>
+        Support for Java 7
+    </li>
+</ul>
+<b>New Options</b>
+<ul>
+    <li>
+        -limit-affected
+    </li>
+</ul>
+<b>Bug Fixes</b>
+<ul>
+    <li>
+        Corrected formatting of output html reports
+    </li>
+    <li>
+        Fixed issue #7: "The command line is too long"
+    </li>
+    <li>
+        Improved performance on large input objects (30%)
+    </li>
+    <li>
+        Fixed issue #8: "-client option doesn't work"
+    </li>
+</ul>
+<b>Other</b>
+<ul>
+    <li>
+        Code cleaning
+    </li>
+    <li>
+        Corrected Makefile
+    </li>
+</ul>
+<br/>
+
+<b>Version 1.2.1 (October 09, 2012)</b><br/>
+<b>New Options</b>
+<ul>
+    <li>
+        -show-access
+    </li>
+</ul>
+<b>Bug Fixes</b>
+<ul>
+    <li>
+        Fixed -open and -browse options
+    </li>
+</ul>
+<br/>
+
+<b>Version 1.2 (September 22, 2012)</b><br/>
+<b>New Options</b>
+<ul>
+    <li>
+        -skip-deprecated
+    </li>
+    <li>
+        -skip-classes
+    </li>
+</ul>
+<b>Bug Fixes</b>
+<ul>
+    <li>
+        Fixed an issue with spaces in the execution path
+    </li>
+</ul>
+<b>Other</b>
+<ul>
+    <li>
+        Code cleaning
+    </li>
+</ul>
+<br/>
+
+<b>Version 1.1.2 (June 08, 2012)</b><br/>
+<b>New Options</b>
+<ul>
+    <li>
+        -sort
+    </li>
+    <li>
+        -open
+    </li>
+</ul>
+<b>Bug Fixes</b>
+<ul>
+    <li>
+        Fixed an issue with -classes-list option
+    </li>
+    <li>
+        Fixed an issue with spaces in the path to javap and other commands
+    </li>
+    <li>
+         Fixed an issue with escaping of inner class specifier
+    </li>
+</ul>
+<b>Other</b>
+<ul>
+    <li>
+        Code cleaning
+    </li>
+</ul>
+<br/>
+
+<b>Version 1.1 (April 16, 2012)</b><br/>
+<b>Improvements</b>
+<ul>
+    <li>
+        Improved design of the compatibility report
+    </li>
+    <li>
+        Added compatibility rate in the summary of the report
+    </li>
+    <li>
+        Added "Other Changes in Data Types" section of the compatibility report
+    </li>
+</ul>
+<b>New Options</b>
+<ul>
+    <li>
+        -debug
+    </li>
+    <li>
+        -quick
+    </li>
+    <li>
+        -browse
+    </li>
+    <li>
+        -report-path
+    </li>
+    <li>
+        -bin-report-path
+    </li>
+    <li>
+        -src-report-path
+    </li>
+</ul>
+<b>Other</b>
+<ul>
+    <li>
+        Code cleaning 
+    </li>
+</ul>
+<br/>
+
+<b>Version 1.0.3 (December 13, 2011)</b><br/>
+<b>Improvements</b>
+<ul>
+    <li>
+        Add Makefile.pl installer
+    </li>
+</ul>
+<b>Other</b>
+<ul>
+    <li>
+        Corrected INSTALL file
+    </li>
+    <li>
+        Corrected help message
+    </li>
+    <li>
+        Changed license to dual GPL and LGPL of any version
+    </li>
+    <li>
+         Added check for presence of installed JDK-devel package in the system
+    </li>
+    <li>
+        Updated copyrights
+    </li>
+</ul>
+<br/>
+
+<b>Version 1.0 (August 30, 2011) </b><br/>
+Initial prototype
+<br/>
+
+<div class="footer">
+    get the source code on GitHub : <a href="https://github.com/lvc/japi-compliance-checker">lvc/japi-compliance-checker</a>
+</div>
+
+<br/>
+<br/>
+
+</div>
+</body>
+</html>
