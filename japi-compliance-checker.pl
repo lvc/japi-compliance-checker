@@ -799,10 +799,14 @@ sub search_Cmd_Path($)
     if(defined $Cache{"search_Cmd_Path"}{$Name}) {
         return $Cache{"search_Cmd_Path"}{$Name};
     }
-    foreach my $Path (sort {length($a)<=>length($b)} keys(%{$SystemPaths{"bin"}}))
+    
+    if(defined $SystemPaths{"bin"})
     {
-        if(-f $Path."/".$Name or -f $Path."/".$Name.".exe") {
-            return ($Cache{"search_Cmd_Path"}{$Name} = joinPath($Path,$Name));
+        foreach my $Path (sort {length($a)<=>length($b)} keys(%{$SystemPaths{"bin"}}))
+        {
+            if(-f $Path."/".$Name or -f $Path."/".$Name.".exe") {
+                return ($Cache{"search_Cmd_Path"}{$Name} = joinPath($Path,$Name));
+            }
         }
     }
 
@@ -8070,6 +8074,11 @@ sub detect_bin_default_paths()
 
 sub detect_default_paths()
 {
+    if(keys(%SystemPaths))
+    {# run once
+        return;
+    }
+    
     foreach my $Type (keys(%{$OS_AddPath{$OSgroup}}))
     {# additional search paths
         foreach my $Path (keys(%{$OS_AddPath{$OSgroup}{$Type}}))
@@ -8485,7 +8494,9 @@ sub scenario()
             exitStatus("Error", "input file is not a java archive");
         }
         
-        if(-f $ClientPath) {
+        if(-f $ClientPath)
+        {
+            detect_default_paths();
             readArchive(0, $ClientPath)
         }
         else {

@@ -17,5 +17,9 @@ REQUIRES:
 USAGE:
   japi-compliance-checker OLD.jar NEW.jar
 
+API DUMPS:
+  japi-compliance-checker -dump LIB.jar -dump-path ./API.dump
+  japi-compliance-checker API-0.dump API-1.dump
+
 ADV. USAGE:
   For advanced usage, see doc/Readme.html or output of --help option.
