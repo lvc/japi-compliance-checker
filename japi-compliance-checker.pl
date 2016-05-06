@@ -115,26 +115,6 @@ if($#ARGV==-1)
     exit(0);
 }
 
-foreach (2 .. $#ARGV)
-{ # correct comma separated options
-    if($ARGV[$_-1] eq ",")
-    {
-        $ARGV[$_-2].=",".$ARGV[$_];
-        splice(@ARGV, $_-1, 2);
-    }
-    elsif($ARGV[$_-1]=~/,\Z/)
-    {
-        $ARGV[$_-1].=$ARGV[$_];
-        splice(@ARGV, $_, 1);
-    }
-    elsif($ARGV[$_]=~/\A,/
-    and $ARGV[$_] ne ",")
-    {
-        $ARGV[$_-1].=$ARGV[$_];
-        splice(@ARGV, $_, 1);
-    }
-}
-
 GetOptions("h|help!" => \$Help,
   "v|version!" => \$ShowVersion,
   "dumpversion!" => \$DumpVersion,
@@ -7841,6 +7821,7 @@ sub createDescriptor($$)
 {
     my ($LibVersion, $Path) = @_;
     return if(not $LibVersion or not $Path or not -e $Path);
+    
     if(isDump($Path))
     { # API dump
         read_API_Dump($LibVersion, $Path);
@@ -7901,57 +7882,64 @@ sub show_time_interval($)
 sub checkVersionNum($$)
 {
     my ($LibVersion, $Path) = @_;
-    if(my $VerNum = $TargetVersion{$LibVersion}) {
-        return $VerNum;
+    
+    if($TargetVersion{$LibVersion}) {
+        return;
     }
-    my $Alt = 0;
-    my $VerNum = "";
-    foreach my $Part (split(/\s*,\s*/, $Path))
+    
+    if($Path!~/\.jar\Z/i) {
+        return;
+    }
+    
+    my $Ver = undef;
+    
+    if(not defined $Ver) {
+        $Ver = getManifestVersion(get_abs_path($Path));
+    }
+    
+    if(not defined $Ver) {
+        $Ver = getPkgVersion(get_filename($Path));
+    }
+    
+    if(not defined $Ver) {
+        $Ver = parseVersion($Path);
+    }
+    
+    if(not defined $Ver)
     {
-        if(not $VerNum and -d $Part)
+        if($DumpAPI)
         {
-            $Alt = 1;
-            $Part=~s/\Q$TargetLibraryName\E//g;
-            $VerNum = parseVersion($Part);
+            $Ver = "XYZ";
         }
-        if(not $VerNum and $Part=~/\.jar\Z/i)
+        else
         {
-            $Alt = 1;
-            $VerNum = readJarVersion(get_abs_path($Part));
-            if(not $VerNum) {
-                $VerNum = getPkgVersion(get_filename($Part));
-            }
-            if(not $VerNum) {
-                $VerNum = parseVersion($Part);
-            }
-        }
-        if($VerNum)
-        {
-            $TargetVersion{$LibVersion} = $VerNum;
-            if($DumpAPI) {
-                printMsg("WARNING", "set version number to $VerNum (use -vnum option to change it)");
+            if($LibVersion==1) {
+                $Ver = "X";
             }
             else {
-                printMsg("WARNING", "set ".($LibVersion==1?"1st":"2nd")." version number to $VerNum (use -v$LibVersion option to change it)");
+                $Ver = "Y";
             }
-            return $TargetVersion{$LibVersion};
         }
     }
-    if($Alt)
-    {
-        if($DumpAPI) {
-            exitStatus("Error", "version number is not set (use -vnum option)");
-        }
-        else {
-            exitStatus("Error", ($LibVersion==1?"1st":"2nd")." version number is not set (use -v$LibVersion option)");
-        }
+    
+    $TargetVersion{$LibVersion} = $Ver;
+    
+    if($DumpAPI) {
+        printMsg("WARNING", "set version number to $Ver (use -vnum option to change it)");
+    }
+    else {
+        printMsg("WARNING", "set #$LibVersion version number to $Ver (use --v$LibVersion=NUM option to change it)");
     }
 }
 
-sub readJarVersion($)
+sub getManifestVersion($)
 {
     my $Path = $_[0];
-    return "" if(not $Path or not -e $Path);
+    
+    if(not $Path or not -e $Path) {
+        return undef;
+    }
+    
     my $JarCmd = get_CmdPath("jar");
     if(not $JarCmd) {
         exitStatus("Not_Found", "can't find \"jar\" command");
@@ -7965,17 +7953,21 @@ sub readJarVersion($)
             return $2;
         }
     }
-    return "";
+    return undef;
 }
 
 sub parseVersion($)
 {
     my $Str = $_[0];
-    return "" if(not $Str);
+    
+    if(not $Str) {
+        return undef;
+    }
+    
     if($Str=~/(\/|\\|\w|\A)[\-\_]*(\d+[\d\.\-]+\d+|\d+)/) {
         return $2;
     }
-    return "";
+    return undef;
 }
 
 sub getPkgVersion($)
@@ -8000,7 +7992,7 @@ sub getPkgVersion($)
     { # libsampleNb
         return ($1, $2);
     }
-    return ();
+    return (undef, undef);
 }
 
 sub get_OSgroup()
@@ -8406,11 +8398,13 @@ sub scenario()
         }
         else
         {
-            if($Descriptor{1}{"Path"}=~/\.jar\Z/ and $Descriptor{1}{"Path"}=~/\.jar\Z/)
+            if($Descriptor{1}{"Path"}=~/\.jar\Z/ and $Descriptor{2}{"Path"}=~/\.jar\Z/)
             { # short usage
                 my ($Name1, $Version1) = getPkgVersion(get_filename($Descriptor{1}{"Path"}));
                 my ($Name2, $Version2) = getPkgVersion(get_filename($Descriptor{2}{"Path"}));
-                if($Name1 and $Version1 ne "" and $Version2 ne "")
+                
+                if($Name1 and $Version1 ne ""
+                and $Version2 ne "")
                 {
                     $TargetLibraryName = $Name1;
                     if(not $TargetVersion{1}) {
@@ -8422,8 +8416,9 @@ sub scenario()
                 }
             }
         }
+        
         if(not $TargetLibraryName) {
-            exitStatus("Error", "library name is not selected (option -l)");
+            exitStatus("Error", "library name is not selected (option --lib=NAME)");
         }
     }
     else
@@ -8523,11 +8518,8 @@ sub scenario()
     
     if($DumpAPI)
     {
-        foreach my $Part (split(/\s*,\s*/, $DumpAPI))
-        {
-            if(not -e $Part) {
-                exitStatus("Access_Error", "can't access \'$Part\'");
-            }
+        if(not -e $DumpAPI) {
+            exitStatus("Access_Error", "can't access \'$DumpAPI\'");
         }
         
         detect_default_paths();
@@ -8541,9 +8533,7 @@ sub scenario()
         if(not $GzipCmd) {
             exitStatus("Not_Found", "can't find \"gzip\"");
         }
-        foreach my $Part (split(/\s*,\s*/, $DumpAPI)) {
-            createDescriptor(1, $Part);
-        }
+        createDescriptor(1, $DumpAPI);
         if(not $Descriptor{1}{"Archives"}) {
             exitStatus("Error", "descriptor does not contain Java ARchives");
         }
@@ -8636,32 +8626,24 @@ sub scenario()
     if(not $Descriptor{1}{"Path"}) {
         exitStatus("Error", "-old option is not specified");
     }
-    foreach my $Part (split(/\s*,\s*/, $Descriptor{1}{"Path"}))
-    {
-        if(not -e $Part) {
-            exitStatus("Access_Error", "can't access \'$Part\'");
-        }
+    if(not -e $Descriptor{1}{"Path"}) {
+        exitStatus("Access_Error", "can't access \'".$Descriptor{1}{"Path"}."\'");
     }
     if(not $Descriptor{2}{"Path"}) {
         exitStatus("Error", "-new option is not specified");
     }
-    foreach my $Part (split(/\s*,\s*/, $Descriptor{2}{"Path"}))
-    {
-        if(not -e $Part) {
-            exitStatus("Access_Error", "can't access \'$Part\'");
-        }
+    if(not -e $Descriptor{2}{"Path"}) {
+        exitStatus("Access_Error", "can't access \'".$Descriptor{2}{"Path"}."\'");
     }
     
     detect_default_paths();
     
     checkVersionNum(1, $Descriptor{1}{"Path"});
     checkVersionNum(2, $Descriptor{2}{"Path"});
-    foreach my $Part (split(/\s*,\s*/, $Descriptor{1}{"Path"})) {
-        createDescriptor(1, $Part);
-    }
-    foreach my $Part (split(/\s*,\s*/, $Descriptor{2}{"Path"})) {
-        createDescriptor(2, $Part);
-    }
+    
+    createDescriptor(1, $Descriptor{1}{"Path"});
+    createDescriptor(2, $Descriptor{2}{"Path"});
+    
     if(not $Descriptor{1}{"Archives"}) {
         exitStatus("Error", "descriptor d1 does not contain Java ARchives");
     }

@@ -1,0 +1,160 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <meta name="description" content="XML Descriptor" />
+  <title>XML Descriptor</title>
+
+  <style type="text/css">
+    body {
+      margin-top: 1.0em;
+      background-color: #deeef7;
+      font-family: Helvetica, Arial, FreeSans, san-serif;
+      color: #000000;
+    }
+    #container {
+      margin: 0 auto;
+      width: 700px;
+    }
+    h1 { font-size: 3.8em; color: #211108; margin-bottom: 3px;margin-top:0px;padding-top:0px;}
+    h1 .small { font-size: 0.4em; }
+    h1 a { text-decoration: none }
+    h2 { font-size: 1.5em; color: #211108; }
+    h3 { text-align: center; color: #211108; }
+    a { color: #211108; }
+    .description { font-size: 1.2em; margin-bottom: 30px; margin-top: 30px; font-style: italic;}
+    .download { float: right; }
+    pre {padding: 0px;margin: 0px;padding-left: 10px;word-wrap:break-word;white-space: pre-wrap;}
+    hr { border: 0; width: 80%; border-bottom: 1px solid #aaa}
+    .footer { text-align: center; padding-top:30px; font-style: italic; }
+    .code {border: dashed 1px gray; background-color: #f0f0f0;}
+    .listing {padding: 10px;border: 1px solid black;width: 70%;font-family:"DejaVu Sans Mono", "Monaco", "Courier New", monospace;font-size:14px;}
+    .summary {border:1px solid black;border-collapse:collapse;}
+    table.summary td, table.summary th {border:1px solid black;padding: 4px;}
+    .ext {color: Brown;font-weight: bold;}
+  </style>
+
+</head>
+
+<body>
+<a href="https://github.com/lvc/japi-compliance-checker"><img style="position: absolute; top: 0; right: 0; border: 0;" src="http://s3.amazonaws.com/github/ribbons/forkme_right_darkblue_121621.png" alt="Fork me on GitHub" /></a>
+
+<div id="container">
+
+<h1>XML-Descriptor</h1>
+<p/>
+Java library descriptor is a simple XML-file that specifies version number, paths to Java ARchives and optionally some other information.
+<p/>
+
+<table class='summary'><tr><td>
+<div>Table of Contents</div>
+<ul>
+<li><a href="#Primary">Primary Sections</a></li>
+<li><a href="#Optional">Optional Sections</a></li>
+<li><a href="#Examples">Examples</a></li>
+</ul>
+</td></tr></table>
+
+<a name="Primary"></a>
+<h2>Primary Sections</h2>
+<div class='listing'>
+<pre>
+<span style='color:Green;'>&lt;version&gt;</span>
+    /* Version of the library */
+<span style='color:Green;'>&lt;/version&gt;</span>
+
+<span style='color:Green;'>&lt;archives&gt;</span>
+    /* The list of paths to Java ARchives and/or
+       directories with archives, one per line */
+<span style='color:Green;'>&lt;/archives&gt;</span>
+</pre>
+</div>
+<p/>
+
+<a name="Optional"></a>
+<h2>Optional Sections</h2>
+<div class='listing'>
+<pre>
+<span style='color:Green;'>&lt;skip_packages&gt;</span>
+    /* The list of packages, that
+       should not be checked, one per line */
+<span style='color:Green;'>&lt;/skip_packages&gt;</span>
+
+<span style='color:Green;'>&lt;packages&gt;</span>
+    /* The list of packages, that
+       should be checked, one per line.
+       Other packages will not be checked. */
+<span style='color:Green;'>&lt;/packages&gt;</span>
+</pre>
+</div>
+<p/>
+
+<a name="Examples"></a>
+<h2>Examples</h2>
+
+JDO:
+<div class='listing'>
+<pre>
+<span style='color:Green;'>&lt;version&gt;</span>
+    2.2
+<span style='color:Green;'>&lt;/version&gt;</span>
+
+<span style='color:Green;'>&lt;archives&gt;</span>
+    installed/jdo/2.2/jdo2-api-2.2.jar
+<span style='color:Green;'>&lt;/archives&gt;</span>
+</pre>
+</div>
+<p/>
+
+JDK:
+<div class='listing'>
+<pre>
+<span style='color:Green;'>&lt;version&gt;</span>
+    1.6.0
+<span style='color:Green;'>&lt;/version&gt;</span>
+
+<span style='color:Green;'>&lt;archives&gt;</span>
+    installed/jdk/1.6.0/jre/lib/jsse.jar
+    installed/jdk/1.6.0/jre/lib/jce.jar
+    installed/jdk/1.6.0/jre/lib/rt.jar
+<span style='color:Green;'>&lt;/archives&gt;</span>
+</pre>
+</div>
+<p/>
+
+Jackrabbit:
+<div class='listing'>
+<pre>
+<span style='color:Green;'>&lt;version&gt;</span>
+    2.2.8
+<span style='color:Green;'>&lt;/version&gt;</span>
+
+<span style='color:Green;'>&lt;archives&gt;</span>
+    installed/jackrabbit/2.2.8/jackrabbit-standalone-2.2.8.jar
+<span style='color:Green;'>&lt;/archives&gt;</span>
+
+<span style='color:Green;'>&lt;skip_packages&gt;</span>
+    org.apache.jackrabbit.core
+    org.apache.jackrabbit.standalone.cli.core
+    org.apache.jackrabbit.test
+    x2006.main
+<span style='color:Green;'>&lt;/skip_packages&gt;</span>
+
+<span style='color:Green;'>&lt;packages&gt;</span>
+    org.apache.jackrabbit
+    org.apache.jcr
+<span style='color:Green;'>&lt;/packages&gt;</span>
+</pre>
+</div>
+<p/>
+
+<div class="footer">
+    get the source code on GitHub : <a href="https://github.com/lvc/japi-compliance-checker">lvc/japi-compliance-checker</a>
+</div>
+
+<br/>
+<br/>
+
+</div>
+</body>
+</html>
