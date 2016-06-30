@@ -59,7 +59,7 @@ $ShowAccess, $AffectLimit, $JdkPath, $SkipInternalPackages, $HideTemplates,
 $HidePackages, $ShowPackages, $Minimal, $AnnotationsListPath,
 $SkipPackagesList, $OutputDumpPath, $AllAffected, $Compact,
 $SkipAnnotationsListPath, $ExternCss, $ExternJs, $SkipInternalTypes,
-$AddedAnnotations, $RemovedAnnotations, $CountMethods);
+$AddedAnnotations, $RemovedAnnotations, $CountMethods, %DepDump);
 
 my $CmdName = get_filename($0);
 my $OSgroup = get_OSgroup();
@@ -154,6 +154,8 @@ GetOptions("h|help!" => \$Help,
   "added-annotations!" => \$AddedAnnotations,
   "removed-annotations!" => \$RemovedAnnotations,
   "count-methods=s" => \$CountMethods,
+  "dep1=s" => \$DepDump{1},
+  "dep2=s" => \$DepDump{2},
 # other options
   "test!" => \$TestSystem,
   "debug!" => \$Debug,
@@ -406,7 +408,12 @@ EXTRA OPTIONS:
       Apply filters by annotations only to old version of the library.
   
   -count-methods PATH
-      Count total methods in the API dump.
+      Count total public methods in the API dump.
+  
+  -dep1 PATH
+  -dep2 PATH
+      Path to the API dump of the required dependency archive. It will
+      be used to resolve overwritten methods and more.
 
 OTHER OPTIONS:
   -test
@@ -468,8 +475,10 @@ my %TypeProblems_Kind=(
         "Removed_Super_Class"=>"Medium",
         "Changed_Super_Class"=>"Medium",
         "Abstract_Class_Added_Super_Interface"=>"Medium",
+        "Abstract_Class_Added_Super_Interface_With_Implemented_Methods"=>"Safe",
         "Class_Removed_Super_Interface"=>"High",
         "Interface_Added_Super_Interface"=>"Medium",
+        "Interface_Added_Super_Interface_With_Implemented_Methods"=>"Safe",
         "Interface_Added_Super_Constant_Interface"=>"Low",
         "Interface_Removed_Super_Interface"=>"High",
         "Class_Became_Interface"=>"High",
@@ -506,8 +515,10 @@ my %TypeProblems_Kind=(
         "Removed_Super_Class"=>"Medium",
         "Changed_Super_Class"=>"Medium",
         "Abstract_Class_Added_Super_Interface"=>"High",
+        "Abstract_Class_Added_Super_Interface_With_Implemented_Methods"=>"Safe",
         "Class_Removed_Super_Interface"=>"High",
         "Interface_Added_Super_Interface"=>"High",
+        "Interface_Added_Super_Interface_With_Implemented_Methods"=>"Safe",
         "Interface_Added_Super_Constant_Interface"=>"Low",
         "Interface_Removed_Super_Interface"=>"High",
         "Interface_Removed_Super_Constant_Interface"=>"High",
@@ -1604,29 +1615,32 @@ sub mergeTypes($$)
             {
               # Java 6: java.lang.Object
               # Java 7: none
-                if($SuperClass2{"Abstract"}
-                and $Type1{"Abstract"} and $Type2{"Abstract"}
-                and keys(%{$Class_AbstractMethods{2}{$SuperClass2{"Name"}}}))
+                if($SuperClass2{"Name"} ne "java.lang.Object")
                 {
-                    my $Add_Effect = "";
-                    if(my @Invoked = sort keys(%{$ClassMethod_AddedUsed{$Type1{"Name"}}}))
+                    if($SuperClass2{"Abstract"}
+                    and $Type1{"Abstract"} and $Type2{"Abstract"}
+                    and keys(%{$Class_AbstractMethods{2}{$SuperClass2{"Name"}}}))
                     {
-                        my $MFirst = $Invoked[0];
-                        my $MSignature = unmangle($MFirst);
-                        $MSignature=~s/\A.+\.(\w+\()/$1/g; # short name
-                        my $InvokedBy = $ClassMethod_AddedUsed{$Type1{"Name"}}{$MFirst};
-                        $Add_Effect = " Abstract method ".black_Name_Str(htmlSpecChars($MSignature))." from the added abstract super-class is called by the method ".black_Name($InvokedBy, 2)." in 2nd library version and may not be implemented by old clients.";
+                        my $Add_Effect = "";
+                        if(my @Invoked = sort keys(%{$ClassMethod_AddedUsed{$Type1{"Name"}}}))
+                        {
+                            my $MFirst = $Invoked[0];
+                            my $MSignature = unmangle($MFirst);
+                            $MSignature=~s/\A.+\.(\w+\()/$1/g; # short name
+                            my $InvokedBy = $ClassMethod_AddedUsed{$Type1{"Name"}}{$MFirst};
+                            $Add_Effect = " Abstract method ".black_Name_Str(htmlSpecChars($MSignature))." from the added abstract super-class is called by the method ".black_Name($InvokedBy, 2)." in 2nd library version and may not be implemented by old clients.";
+                        }
+                        %{$SubProblems{"Abstract_Class_Added_Super_Abstract_Class"}{""}} = (
+                            "Type_Name"=>$Type1{"Name"},
+                            "Target"=>$SuperClass2{"Name"},
+                            "Add_Effect"=>$Add_Effect  );
                     }
-                    %{$SubProblems{"Abstract_Class_Added_Super_Abstract_Class"}{""}} = (
-                        "Type_Name"=>$Type1{"Name"},
-                        "Target"=>$SuperClass2{"Name"},
-                        "Add_Effect"=>$Add_Effect  );
-                }
-                else
-                {
-                    %{$SubProblems{"Added_Super_Class"}{""}} = (
-                        "Type_Name"=>$Type1{"Name"},
-                        "Target"=>$SuperClass2{"Name"}  );
+                    else
+                    {
+                        %{$SubProblems{"Added_Super_Class"}{""}} = (
+                            "Type_Name"=>$Type1{"Name"},
+                            "Target"=>$SuperClass2{"Name"}  );
+                    }
                 }
             }
             elsif($SuperClass2{"Name"} eq "java.lang.Object"
@@ -1634,9 +1648,12 @@ sub mergeTypes($$)
             {
               # Java 6: java.lang.Object
               # Java 7: none
-                %{$SubProblems{"Removed_Super_Class"}{""}} = (
-                    "Type_Name"=>$Type1{"Name"},
-                    "Target"=>$SuperClass1{"Name"}  );
+                if($SuperClass1{"Name"} ne "java.lang.Object")
+                {
+                    %{$SubProblems{"Removed_Super_Class"}{""}} = (
+                        "Type_Name"=>$Type1{"Name"},
+                        "Target"=>$SuperClass1{"Name"}  );
+                }
             }
             else
             {
@@ -1656,7 +1673,13 @@ sub mergeTypes($$)
         {
             if($Type1{"Type"} eq "interface")
             {
-                if(keys(%{$Class_AbstractMethods{2}{$SuperInterface}})
+                if(checkDefaultImpl(2, $SuperInterface, $Type2{"Name"}))
+                {
+                    %{$SubProblems{"Interface_Added_Super_Interface_With_Implemented_Methods"}{get_SFormat($SuperInterface)}} = (
+                        "Type_Name"=>$Type2{"Name"},
+                        "Target"=>$SuperInterface  );
+                }
+                elsif(keys(%{$Class_AbstractMethods{2}{$SuperInterface}})
                 or $SuperInterface=~/\Ajava\./)
                 {
                     my $Add_Effect = "";
@@ -1676,7 +1699,7 @@ sub mergeTypes($$)
                 elsif(keys(%{$Class_Fields{2}{$SuperInterface}}))
                 {
                     %{$SubProblems{"Interface_Added_Super_Constant_Interface"}{get_SFormat($SuperInterface)}} = (
-                        "Type_Name"=>$Type1{"Name"},
+                        "Type_Name"=>$Type2{"Name"},
                         "Target"=>$SuperInterface  );
                 }
                 else {
@@ -1687,19 +1710,28 @@ sub mergeTypes($$)
             {
                 if($Type1{"Abstract"} and $Type2{"Abstract"})
                 {
-                    my $Add_Effect = "";
-                    if(my @Invoked = sort keys(%{$ClassMethod_AddedUsed{$Type1{"Name"}}}))
+                    if(checkDefaultImpl(2, $SuperInterface, $Type2{"Name"}))
                     {
-                        my $MFirst = $Invoked[0];
-                        my $MSignature = unmangle($MFirst);
-                        $MSignature=~s/\A.+\.(\w+\()/$1/g; # short name
-                        my $InvokedBy = $ClassMethod_AddedUsed{$Type1{"Name"}}{$MFirst};
-                        $Add_Effect = " Abstract method ".black_Name_Str(htmlSpecChars($MSignature))." from the added super-interface is called by the method ".black_Name($InvokedBy, 2)." in 2nd library version and may not be implemented by old clients.";
+                        %{$SubProblems{"Abstract_Class_Added_Super_Interface_With_Implemented_Methods"}{get_SFormat($SuperInterface)}} = (
+                            "Type_Name"=>$Type1{"Name"},
+                            "Target"=>$SuperInterface  );
                     }
-                    %{$SubProblems{"Abstract_Class_Added_Super_Interface"}{get_SFormat($SuperInterface)}} = (
-                        "Type_Name"=>$Type1{"Name"},
-                        "Target"=>$SuperInterface,
-                        "Add_Effect"=>$Add_Effect  );
+                    else
+                    {
+                        my $Add_Effect = "";
+                        if(my @Invoked = sort keys(%{$ClassMethod_AddedUsed{$Type1{"Name"}}}))
+                        {
+                            my $MFirst = $Invoked[0];
+                            my $MSignature = unmangle($MFirst);
+                            $MSignature=~s/\A.+\.(\w+\()/$1/g; # short name
+                            my $InvokedBy = $ClassMethod_AddedUsed{$Type1{"Name"}}{$MFirst};
+                            $Add_Effect = " Abstract method ".black_Name_Str(htmlSpecChars($MSignature))." from the added super-interface is called by the method ".black_Name($InvokedBy, 2)." in 2nd library version and may not be implemented by old clients.";
+                        }
+                        %{$SubProblems{"Abstract_Class_Added_Super_Interface"}{get_SFormat($SuperInterface)}} = (
+                            "Type_Name"=>$Type1{"Name"},
+                            "Target"=>$SuperInterface,
+                            "Add_Effect"=>$Add_Effect  );
+                    }
                 }
             }
         }
@@ -1956,6 +1988,27 @@ sub mergeTypes($$)
     return ($Cache{"mergeTypes"}{$Type1_Id}{$Type2_Id} = \%SubProblems);
 }
 
+sub checkDefaultImpl($$$)
+{ # Check if all abstract methods of the super class have
+  # default implementations in the class
+    my ($LibVersion, $SuperClassName, $ClassName) = @_;
+    
+    foreach my $Method (keys(%{$Class_AbstractMethods{$LibVersion}{$SuperClassName}}))
+    {
+        if(my $Overridden = findMethod($Method, $LibVersion, $ClassName, $LibVersion))
+        {
+            if($MethodInfo{$Overridden}{"Abstract"}) {
+                return 0;
+            }
+        }
+        else {
+            return 0;
+        }
+    }
+    
+    return 1;
+}
+
 sub unmangle($)
 {
     my $Name = $_[0];
@@ -2095,6 +2148,10 @@ sub classFilter($$$)
 {
     my ($Class, $LibVersion, $ClassContext) = @_;
     
+    if(defined $Class->{"Dep"}) {
+        return 0;
+    }
+    
     my $CName = $Class->{"Name"};
     my $Package = $Class->{"Package"};
     
@@ -2196,6 +2253,10 @@ sub annotationFilter($$)
 sub methodFilter($$)
 {
     my ($Method, $LibVersion) = @_;
+    
+    if(defined $MethodInfo{$LibVersion}{$Method}{"Dep"}) {
+        return 0;
+    }
     
     if($MethodInfo{$LibVersion}{$Method}{"Access"}=~/private/)
     { # non-public
@@ -3556,7 +3617,7 @@ sub get_Summary($)
     $META_DATA .= $RESULT{$Level}{"Problems"}?"verdict:incompatible;":"verdict:compatible;";
     $TestResults .= "<tr><th>Compatibility</th>\n";
     
-    my $BC_Rate = 100 - $RESULT{$Level}{"Affected"};
+    my $BC_Rate = show_number(100 - $RESULT{$Level}{"Affected"});
     
     if($RESULT{$Level}{"Problems"})
     {
@@ -4308,6 +4369,11 @@ sub get_Report_TypeProblems($$)
                                 $Effect = "Recompilation of a client program may be terminated with the message: a client class C is not abstract and does not override abstract method in <b>".htmlSpecChars($TypeName)."</b>.";
                             }
                         }
+                        elsif($Kind eq "Abstract_Class_Added_Super_Interface_With_Implemented_Methods")
+                        {
+                            $Change = "Added super-interface <b>".htmlSpecChars($Target)."</b>.";
+                            $Effect = "No effect.";
+                        }
                         elsif($Kind eq "Interface_Added_Super_Interface")
                         {
                             $Change = "Added super-interface <b>".htmlSpecChars($Target)."</b>.";
@@ -4323,6 +4389,11 @@ sub get_Report_TypeProblems($$)
                             else {
                                 $Effect = "Recompilation of a client program may be terminated with the message: a client class C is not abstract and does not override abstract method in <b>".htmlSpecChars($Target)."</b>.";
                             }
+                        }
+                        elsif($Kind eq "Interface_Added_Super_Interface_With_Implemented_Methods")
+                        {
+                            $Change = "Added super-interface <b>".htmlSpecChars($Target)."</b>.";
+                            $Effect = "No effect.";
                         }
                         elsif($Kind eq "Interface_Added_Super_Constant_Interface")
                         {
@@ -4674,6 +4745,10 @@ sub getAffectedMethods($$$)
     my %SymLocKind = ();
     foreach my $Method (sort keys(%{$TypeProblemsIndex{$Target_TypeName}}))
     {
+        if($Method eq ".client_method") {
+            next;
+        }
+        
         foreach my $Kind (@Kinds)
         {
             foreach my $Loc (@{$KLocs{$Kind}})
@@ -4684,10 +4759,6 @@ sub getAffectedMethods($$$)
                 
                 my $Type_Name = $CompatProblems{$Method}{$Kind}{$Loc}{"Type_Name"};
                 if($Type_Name ne $Target_TypeName) {
-                    next;
-                }
-                
-                if($Method eq ".client_method") {
                     next;
                 }
                 
@@ -7741,9 +7812,9 @@ sub isDumpFile($)
     return 0;
 }
 
-sub read_API_Dump($$)
+sub read_API_Dump($$$)
 {
-    my ($LibVersion, $Path) = @_;
+    my ($LibVersion, $Path, $Subj) = @_;
     return if(not $LibVersion or not -e $Path);
     
     my $FilePath = unpackDump($Path);
@@ -7765,13 +7836,28 @@ sub read_API_Dump($$)
     { # compatible with the dumps of the same major version
         exitStatus("Dump_Version", "incompatible version $DumpVersion of specified API dump (allowed only $API_DUMP_MAJOR.0<=V<=$API_DUMP_MAJOR.9)");
     }
-    $TypeInfo{$LibVersion} = $APIDump->{"TypeInfo"};
-    foreach my $TypeId (keys(%{$TypeInfo{$LibVersion}}))
+    
+    if(defined $TypeInfo{$LibVersion})
+    {
+        foreach my $TId (keys(%{$APIDump->{"TypeInfo"}}))
+        {
+            $TypeInfo{$LibVersion}{$TId} = $APIDump->{"TypeInfo"}{$TId};
+        }
+    }
+    else {
+        $TypeInfo{$LibVersion} = $APIDump->{"TypeInfo"};
+    }
+    
+    foreach my $TypeId (keys(%{$APIDump->{"TypeInfo"}}))
     {
         my %TypeAttr = %{$TypeInfo{$LibVersion}{$TypeId}};
         $TName_Tid{$LibVersion}{$TypeAttr{"Name"}} = $TypeId;
-        if(my $Archive = $TypeAttr{"Archive"}) {
-            $LibArchives{$LibVersion}{$Archive} = 1;
+        
+        if($Subj ne "Dep")
+        {
+            if(my $Archive = $TypeAttr{"Archive"}) {
+                $LibArchives{$LibVersion}{$Archive} = 1;
+            }
         }
         
         foreach my $FieldName (keys(%{$TypeAttr{"Fields"}}))
@@ -7780,12 +7866,20 @@ sub read_API_Dump($$)
                 $Class_Fields{$LibVersion}{$TypeAttr{"Name"}}{$FieldName} = $TypeAttr{"Fields"}{$FieldName}{"Type"};
             }
         }
+        
+        if($Subj eq "Dep") {
+            $TypeInfo{$LibVersion}{$TypeId}{"Dep"} = 1;
+        }
     }
     my $MInfo = $APIDump->{"MethodInfo"};
     foreach my $M_Id (keys(%{$MInfo}))
     {
         my $Name = $MInfo->{$M_Id}{"Name"};
         $MethodInfo{$LibVersion}{$Name} = $MInfo->{$M_Id};
+        
+        if($Subj eq "Dep") {
+            $MethodInfo{$LibVersion}{$Name}{"Dep"} = 1;
+        }
     }
     
     my $MUsed = $APIDump->{"MethodUsed"};
@@ -7824,7 +7918,7 @@ sub createDescriptor($$)
     
     if(isDump($Path))
     { # API dump
-        read_API_Dump($LibVersion, $Path);
+        read_API_Dump($LibVersion, $Path, "Main");
     }
     else
     {
@@ -7843,6 +7937,10 @@ sub createDescriptor($$)
         { # standard XML descriptor
             readDescriptor($LibVersion, readFile($Path));
         }
+    }
+    
+    if(my $Dep = $DepDump{$LibVersion}) {
+        read_API_Dump($LibVersion, $Dep, "Dep");
     }
 }
 
@@ -7983,7 +8081,7 @@ sub getPkgVersion($)
     { # libsampleN
         return ($1, $2);
     }
-    elsif($Name=~/\A(.+)[\-\_](v|ver|)(.+?)\Z/i)
+    elsif($Name=~/\A(.+)[\-\_](v|ver|)(\d.+?)\Z/i)
     { # libsample-N
       # libsample-vN
         return ($1, $3);
@@ -8505,7 +8603,7 @@ sub scenario()
             exitStatus("Access_Error", "can't access \'$CountMethods\'");
         }
         
-        read_API_Dump(1, $CountMethods);
+        read_API_Dump(1, $CountMethods, "Main");
         
         my $Count = 0;
         foreach my $Method (keys(%{$MethodInfo{1}})) {
