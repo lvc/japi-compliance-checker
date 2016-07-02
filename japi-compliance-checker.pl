@@ -6868,7 +6868,7 @@ sub readArchive($$)
     if(not $JarCmd) {
         exitStatus("Not_Found", "can't find \"jar\" command");
     }
-    my $ExtractPath = "$TMP_DIR/".$ExtractCounter;
+    my $ExtractPath = joinPath($TMP_DIR, $ExtractCounter);
     if(-d $ExtractPath) {
         rmtree($ExtractPath);
     }
@@ -6882,7 +6882,10 @@ sub readArchive($$)
     my @Classes = ();
     foreach my $ClassPath (cmd_find($ExtractPath,"","*\.class",""))
     {
-        $ClassPath=~s/\.class\Z//g;
+        if($OSgroup ne "windows") {
+            $ClassPath=~s/\.class\Z//g;
+        }
+        
         my $ClassName = get_filename($ClassPath);
         if($ClassName=~/\$\d/) {
             next;
