@@ -485,6 +485,7 @@ my %TypeProblems_Kind=(
         "Interface_Added_Super_Interface_With_Implemented_Methods"=>"Safe",
         "Interface_Added_Super_Constant_Interface"=>"Low",
         "Interface_Removed_Super_Interface"=>"High",
+        "Interface_Removed_Super_Constant_Interface"=>"Safe",
         "Class_Became_Interface"=>"High",
         "Interface_Became_Class"=>"High",
         "Class_Became_Final"=>"High",
@@ -1674,46 +1675,53 @@ sub mergeTypes($$)
     {
         if(not $SuperInterfaces_Old{$SuperInterface})
         {
+            my $HaveMethods = keys(%{$Class_AbstractMethods{2}{$SuperInterface}});
+            my $HaveFields = keys(%{$Class_Fields{2}{$SuperInterface}});
+            
             if($Type1{"Type"} eq "interface")
             {
-                if(checkDefaultImpl(2, $SuperInterface, $Type2{"Name"}))
-                {
-                    %{$SubProblems{"Interface_Added_Super_Interface_With_Implemented_Methods"}{get_SFormat($SuperInterface)}} = (
-                        "Type_Name"=>$Type2{"Name"},
-                        "Target"=>$SuperInterface  );
-                }
-                elsif(keys(%{$Class_AbstractMethods{2}{$SuperInterface}})
+                if($HaveMethods
                 or $SuperInterface=~/\Ajava\./)
                 {
-                    my $Add_Effect = "";
-                    if(my @Invoked = sort keys(%{$ClassMethod_AddedUsed{$Type1{"Name"}}}))
+                    if($HaveMethods and checkDefaultImpl(2, $SuperInterface, $Type2{"Name"}))
                     {
-                        my $MFirst = $Invoked[0];
-                        my $MSignature = unmangle($MFirst);
-                        $MSignature=~s/\A.+\.(\w+\()/$1/g; # short name
-                        my $InvokedBy = $ClassMethod_AddedUsed{$Type1{"Name"}}{$MFirst};
-                        $Add_Effect = " Abstract method ".black_Name_Str(htmlSpecChars($MSignature))." from the added super-interface is called by the method ".black_Name($InvokedBy, 2)." in 2nd library version and may not be implemented by old clients.";
+                        %{$SubProblems{"Interface_Added_Super_Interface_With_Implemented_Methods"}{get_SFormat($SuperInterface)}} = (
+                            "Type_Name"=>$Type2{"Name"},
+                            "Target"=>$SuperInterface  );
                     }
-                    %{$SubProblems{"Interface_Added_Super_Interface"}{get_SFormat($SuperInterface)}} = (
-                        "Type_Name"=>$Type1{"Name"},
-                        "Target"=>$SuperInterface,
-                        "Add_Effect"=>$Add_Effect  );
+                    else
+                    {
+                        my $Add_Effect = "";
+                        if(my @Invoked = sort keys(%{$ClassMethod_AddedUsed{$Type1{"Name"}}}))
+                        {
+                            my $MFirst = $Invoked[0];
+                            my $MSignature = unmangle($MFirst);
+                            $MSignature=~s/\A.+\.(\w+\()/$1/g; # short name
+                            my $InvokedBy = $ClassMethod_AddedUsed{$Type1{"Name"}}{$MFirst};
+                            $Add_Effect = " Abstract method ".black_Name_Str(htmlSpecChars($MSignature))." from the added super-interface is called by the method ".black_Name($InvokedBy, 2)." in 2nd library version and may not be implemented by old clients.";
+                        }
+                        %{$SubProblems{"Interface_Added_Super_Interface"}{get_SFormat($SuperInterface)}} = (
+                            "Type_Name"=>$Type1{"Name"},
+                            "Target"=>$SuperInterface,
+                            "Add_Effect"=>$Add_Effect  );
+                    }
                 }
-                elsif(keys(%{$Class_Fields{2}{$SuperInterface}}))
+                elsif($HaveFields)
                 {
                     %{$SubProblems{"Interface_Added_Super_Constant_Interface"}{get_SFormat($SuperInterface)}} = (
                         "Type_Name"=>$Type2{"Name"},
                         "Target"=>$SuperInterface  );
                 }
-                else {
-                    # ???
+                else
+                {
+                    # empty interface
                 }
             }
             else
             {
                 if($Type1{"Abstract"} and $Type2{"Abstract"})
                 {
-                    if(checkDefaultImpl(2, $SuperInterface, $Type2{"Name"}))
+                    if($HaveMethods and checkDefaultImpl(2, $SuperInterface, $Type2{"Name"}))
                     {
                         %{$SubProblems{"Abstract_Class_Added_Super_Interface_With_Implemented_Methods"}{get_SFormat($SuperInterface)}} = (
                             "Type_Name"=>$Type1{"Name"},
@@ -1741,10 +1749,14 @@ sub mergeTypes($$)
     }
     foreach my $SuperInterface (keys(%SuperInterfaces_Old))
     {
-        if(not $SuperInterfaces_New{$SuperInterface}) {
+        if(not $SuperInterfaces_New{$SuperInterface})
+        {
+            my $HaveMethods = keys(%{$Class_AbstractMethods{1}{$SuperInterface}});
+            my $HaveFields = keys(%{$Class_Fields{1}{$SuperInterface}});
+            
             if($Type1{"Type"} eq "interface")
             {
-                if(keys(%{$Class_AbstractMethods{1}{$SuperInterface}})
+                if($HaveMethods
                 or $SuperInterface=~/\Ajava\./)
                 {
                     %{$SubProblems{"Interface_Removed_Super_Interface"}{get_SFormat($SuperInterface)}} = (
@@ -1752,7 +1764,7 @@ sub mergeTypes($$)
                         "Type_Type"=>"interface",
                         "Target"=>$SuperInterface  );
                 }
-                elsif(keys(%{$Class_Fields{1}{$SuperInterface}}))
+                elsif($HaveFields)
                 {
                     %{$SubProblems{"Interface_Removed_Super_Constant_Interface"}{get_SFormat($SuperInterface)}} = (
                         "Type_Name"=>$Type1{"Name"},
@@ -1998,9 +2010,9 @@ sub checkDefaultImpl($$$)
     
     foreach my $Method (keys(%{$Class_AbstractMethods{$LibVersion}{$SuperClassName}}))
     {
-        if(my $Overridden = findMethod($Method, $LibVersion, $ClassName, $LibVersion))
+        if(my $Overridden = findMethod_Class($Method, $LibVersion, $ClassName, $LibVersion))
         {
-            if($MethodInfo{$Overridden}{"Abstract"}) {
+            if($MethodInfo{$LibVersion}{$Overridden}{"Abstract"}) {
                 return 0;
             }
         }
@@ -4458,9 +4470,14 @@ sub get_Report_TypeProblems($$)
                             }
                         }
                         elsif($Kind eq "Interface_Removed_Super_Constant_Interface")
-                        {# Source Only
+                        {
                             $Change = "Removed super-interface <b>".htmlSpecChars($Target)."</b> containing constants only.";
-                            $Effect = "Recompilation of a client program may be terminated with the message: cannot find variable in $Type_Type <b>".htmlSpecChars($TypeName)."</b>.";
+                            if($Level eq "Binary") {
+                                $Effect = "No effect.";
+                            }
+                            else {
+                                $Effect = "Recompilation of a client program may be terminated with the message: cannot find variable in $Type_Type <b>".htmlSpecChars($TypeName)."</b>.";
+                            }
                         }
                         elsif($Kind eq "Added_Super_Class")
                         {
@@ -6268,6 +6285,28 @@ sub testSystem()
         }
     }");
     
+    # Abstract_Class_Added_Super_Interface_With_Implemented_Methods
+    writeFile($Path_v1."/AbstractClassAddedSuperInterfaceWithImplementedMethods.java",
+    "package $PackageName;
+    public abstract class AbstractClassAddedSuperInterfaceWithImplementedMethods implements BaseInterface {
+        public Integer method(Integer param) {
+            return param;
+        }
+        public Integer method2(Integer param) {
+            return param;
+        }
+    }");
+    writeFile($Path_v2."/AbstractClassAddedSuperInterfaceWithImplementedMethods.java",
+    "package $PackageName;
+    public abstract class AbstractClassAddedSuperInterfaceWithImplementedMethods implements BaseInterface, BaseInterface2 {
+        public Integer method(Integer param) {
+            return param;
+        }
+        public Integer method2(Integer param) {
+            return param;
+        }
+    }");
+    
     # Class_Removed_Super_Interface
     writeFile($Path_v1."/ClassRemovedSuperInterface.java",
     "package $PackageName;
@@ -6287,6 +6326,17 @@ sub testSystem()
         }
         public Integer method2(Integer param) {
             return param;
+        }
+    }");
+    
+    writeFile($TestsPath."/Test_ClassRemovedSuperInterface.java",
+    "import $PackageName.*;
+    public class Test_ClassRemovedSuperInterface
+    {
+        public static void main(String[] args)
+        {
+            ClassRemovedSuperInterface Obj = new ClassRemovedSuperInterface();
+            Integer Res = Obj.method2(0);
         }
     }");
     
@@ -6803,6 +6853,9 @@ sub testSystem()
         public Integer someMethod(AbstractClassAddedSuperInterface param) {
             return 0;
         }
+        public Integer someMethod(AbstractClassAddedSuperInterfaceWithImplementedMethods param) {
+            return 0;
+        }
     }");
     writeFile($Path_v2."/Use.java",
     "package $PackageName;
@@ -6824,6 +6877,9 @@ sub testSystem()
             return param.method2(100);
         }
         public Integer someMethod(AbstractClassAddedSuperInterface param) {
+            return param.method2(100);
+        }
+        public Integer someMethod(AbstractClassAddedSuperInterfaceWithImplementedMethods param) {
             return param.method2(100);
         }
     }");
