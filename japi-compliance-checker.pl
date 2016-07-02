@@ -59,7 +59,7 @@ $ShowAccess, $AffectLimit, $JdkPath, $SkipInternalPackages, $HideTemplates,
 $HidePackages, $ShowPackages, $Minimal, $AnnotationsListPath,
 $SkipPackagesList, $OutputDumpPath, $AllAffected, $Compact,
 $SkipAnnotationsListPath, $ExternCss, $ExternJs, $SkipInternalTypes,
-$AddedAnnotations, $RemovedAnnotations, $CountMethods, %DepDump);
+$AddedAnnotations, $RemovedAnnotations, $CountMethods, %DepDump, $OldStyle);
 
 my $CmdName = get_filename($0);
 my $OSgroup = get_OSgroup();
@@ -156,6 +156,7 @@ GetOptions("h|help!" => \$Help,
   "count-methods=s" => \$CountMethods,
   "dep1=s" => \$DepDump{1},
   "dep2=s" => \$DepDump{2},
+  "old-style!" => \$OldStyle,
 # other options
   "test!" => \$TestSystem,
   "debug!" => \$Debug,
@@ -414,6 +415,9 @@ EXTRA OPTIONS:
   -dep2 PATH
       Path to the API dump of the required dependency archive. It will
       be used to resolve overwritten methods and more.
+  
+  -old-style
+      Generate old-style report.
 
 OTHER OPTIONS:
   -test
@@ -663,7 +667,6 @@ my %ClassList_User;
 my %UsedMethods_Client;
 my %UsedFields_Client;
 my %UsedClasses_Client;
-my %LibClasses;
 my %LibArchives;
 my %Class_Methods;
 my %Class_AbstractMethods;
@@ -3254,6 +3257,9 @@ sub runChecker($$$)
     if(defined $SkipDeprecated) {
         $Cmd .= " -skip-deprecated";
     }
+    if(defined $OldStyle) {
+        $Cmd .= " -old-style";
+    }
     writeFile($TMP_DIR."/skip-annotations.list", "TestPackage.Beta");
     $Cmd .= " -skip-annotations-list ".$TMP_DIR."/skip-annotations.list";
     if($Debug)
@@ -3339,8 +3345,14 @@ sub get_Report_Header($)
 
 sub get_SourceInfo()
 {
-    my $CheckedArchives = "<a name='Checked_Archives'></a><h2>Java ARchives (".keys(%{$LibArchives{1}}).")</h2>\n";
-    $CheckedArchives .= "<hr/><div class='jar_list'>\n";
+    my $CheckedArchives = "<a name='Checked_Archives'></a>";
+    if($OldStyle) {
+        $CheckedArchives .= "<h2>Java ARchives (".keys(%{$LibArchives{1}}).")</h2>";
+    }
+    else {
+        $CheckedArchives .= "<h2>Java ARchives <span class='gray'>&nbsp;".keys(%{$LibArchives{1}})."&nbsp;</span></h2>";
+    }
+    $CheckedArchives .= "\n<hr/><div class='jar_list'>\n";
     foreach my $ArchivePath (sort {lc($a) cmp lc($b)}  keys(%{$LibArchives{1}})) {
         $CheckedArchives .= get_filename($ArchivePath)."<br/>\n";
     }
@@ -3603,7 +3615,7 @@ sub get_Summary($)
     $Checked_Archives_Link = "<a href='#Checked_Archives' style='color:Blue;'>".keys(%{$LibArchives{1}})."</a>" if(keys(%{$LibArchives{1}})>0);
     
     $TestResults .= "<tr><th>Total JARs</th><td>$Checked_Archives_Link</td></tr>\n";
-    $TestResults .= "<tr><th>Total Methods / Classes</th><td>".keys(%CheckedMethods)." / ".keys(%CheckedTypes)."</td></tr>\n"; # keys(%{$LibClasses{1}})
+    $TestResults .= "<tr><th>Total Methods / Classes</th><td>".keys(%CheckedMethods)." / ".keys(%CheckedTypes)."</td></tr>\n";
     
     $RESULT{$Level}{"Problems"} += $Removed+$M_Problems_High+$T_Problems_High+$T_Problems_Medium+$M_Problems_Medium;
     if($StrictCompat) {
@@ -3663,7 +3675,7 @@ sub get_Summary($)
         }
     }
     $META_DATA .= "added:$Added;";
-    $Problem_Summary .= "<tr><th>Added Methods</th><td>-</td><td".getStyle("I", "A", $Added).">$Added_Link</td></tr>";
+    $Problem_Summary .= "<tr><th>Added Methods</th><td>-</td><td".getStyle("M", "Added", $Added).">$Added_Link</td></tr>";
     
     my $Removed_Link = "0";
     if($Removed>0)
@@ -3683,51 +3695,51 @@ sub get_Summary($)
     }
     $META_DATA .= "removed:$Removed;";
     $Problem_Summary .= "<tr><th>Removed Methods</th>";
-    $Problem_Summary .= "<td>High</td><td".getStyle("I", "R", $Removed).">$Removed_Link</td></tr>";
+    $Problem_Summary .= "<td>High</td><td".getStyle("M", "Removed", $Removed).">$Removed_Link</td></tr>";
     
     my $TH_Link = "0";
     $TH_Link = "<a href='#".get_Anchor("Type", $Level, "High")."' style='color:Blue;'>$T_Problems_High</a>" if($T_Problems_High>0);
     $META_DATA .= "type_problems_high:$T_Problems_High;";
     $Problem_Summary .= "<tr><th rowspan='3'>Problems with<br/>Data Types</th>";
-    $Problem_Summary .= "<td>High</td><td".getStyle("T", "H", $T_Problems_High).">$TH_Link</td></tr>";
+    $Problem_Summary .= "<td>High</td><td".getStyle("T", "High", $T_Problems_High).">$TH_Link</td></tr>";
     
     my $TM_Link = "0";
     $TM_Link = "<a href='#".get_Anchor("Type", $Level, "Medium")."' style='color:Blue;'>$T_Problems_Medium</a>" if($T_Problems_Medium>0);
     $META_DATA .= "type_problems_medium:$T_Problems_Medium;";
-    $Problem_Summary .= "<tr><td>Medium</td><td".getStyle("T", "M", $T_Problems_Medium).">$TM_Link</td></tr>";
+    $Problem_Summary .= "<tr><td>Medium</td><td".getStyle("T", "Medium", $T_Problems_Medium).">$TM_Link</td></tr>";
     
     my $TL_Link = "0";
     $TL_Link = "<a href='#".get_Anchor("Type", $Level, "Low")."' style='color:Blue;'>$T_Problems_Low</a>" if($T_Problems_Low>0);
     $META_DATA .= "type_problems_low:$T_Problems_Low;";
-    $Problem_Summary .= "<tr><td>Low</td><td".getStyle("T", "L", $T_Problems_Low).">$TL_Link</td></tr>";
+    $Problem_Summary .= "<tr><td>Low</td><td".getStyle("T", "Low", $T_Problems_Low).">$TL_Link</td></tr>";
     
     my $MH_Link = "0";
     $MH_Link = "<a href='#".get_Anchor("Method", $Level, "High")."' style='color:Blue;'>$M_Problems_High</a>" if($M_Problems_High>0);
     $META_DATA .= "method_problems_high:$M_Problems_High;";
     $Problem_Summary .= "<tr><th rowspan='3'>Problems with<br/>Methods</th>";
-    $Problem_Summary .= "<td>High</td><td".getStyle("M", "H", $M_Problems_High).">$MH_Link</td></tr>";
+    $Problem_Summary .= "<td>High</td><td".getStyle("M", "High", $M_Problems_High).">$MH_Link</td></tr>";
     
     my $MM_Link = "0";
     $MM_Link = "<a href='#".get_Anchor("Method", $Level, "Medium")."' style='color:Blue;'>$M_Problems_Medium</a>" if($M_Problems_Medium>0);
     $META_DATA .= "method_problems_medium:$M_Problems_Medium;";
-    $Problem_Summary .= "<tr><td>Medium</td><td".getStyle("M", "M", $M_Problems_Medium).">$MM_Link</td></tr>";
+    $Problem_Summary .= "<tr><td>Medium</td><td".getStyle("M", "Medium", $M_Problems_Medium).">$MM_Link</td></tr>";
     
     my $ML_Link = "0";
     $ML_Link = "<a href='#".get_Anchor("Method", $Level, "Low")."' style='color:Blue;'>$M_Problems_Low</a>" if($M_Problems_Low>0);
     $META_DATA .= "method_problems_low:$M_Problems_Low;";
-    $Problem_Summary .= "<tr><td>Low</td><td".getStyle("M", "L", $M_Problems_Low).">$ML_Link</td></tr>";
+    $Problem_Summary .= "<tr><td>Low</td><td".getStyle("M", "Low", $M_Problems_Low).">$ML_Link</td></tr>";
     
     # Safe Changes
     if($T_Other)
     {
         my $TS_Link = "<a href='#".get_Anchor("Type", $Level, "Safe")."' style='color:Blue;'>$T_Other</a>";
-        $Problem_Summary .= "<tr><th>Other Changes<br/>in Data Types</th><td>-</td><td".getStyle("T", "S", $T_Other).">$TS_Link</td></tr>\n";
+        $Problem_Summary .= "<tr><th>Other Changes<br/>in Data Types</th><td>-</td><td".getStyle("T", "Safe", $T_Other).">$TS_Link</td></tr>\n";
     }
     
     if($M_Other)
     {
         my $MS_Link = "<a href='#".get_Anchor("Method", $Level, "Safe")."' style='color:Blue;'>$M_Other</a>";
-        $Problem_Summary .= "<tr><th>Other Changes<br/>in Methods</th><td>-</td><td".getStyle("M", "S", $M_Other).">$MS_Link</td></tr>\n";
+        $Problem_Summary .= "<tr><th>Other Changes<br/>in Methods</th><td>-</td><td".getStyle("M", "Safe", $M_Other).">$MS_Link</td></tr>\n";
     }
     $META_DATA .= "checked_methods:".keys(%CheckedMethods).";";
     $META_DATA .= "checked_types:".keys(%CheckedTypes).";";
@@ -3740,16 +3752,18 @@ sub getStyle($$$)
 {
     my ($Subj, $Act, $Num) = @_;
     my %Style = (
-        "A"=>"new",
-        "R"=>"failed",
-        "S"=>"passed",
-        "L"=>"warning",
-        "M"=>"failed",
-        "H"=>"failed"
+        "Added"=>"new",
+        "Removed"=>"failed",
+        "Safe"=>"passed",
+        "Low"=>"warning",
+        "Medium"=>"failed",
+        "High"=>"failed"
     );
+    
     if($Num>0) {
         return " class='".$Style{$Act}."'";
     }
+    
     return "";
 }
 
@@ -3868,7 +3882,13 @@ sub get_Report_Added($)
         if($JoinReport) {
             $Anchor = "<a name='".$Level."_Added'></a>";
         }
-        $ADDED_METHODS = $Anchor."<h2>Added Methods ($Added_Number)</h2><hr/>\n".$ADDED_METHODS.$TOP_REF."<br/>\n";
+        if($OldStyle) {
+            $ADDED_METHODS = "<h2>Added Methods ($Added_Number)</h2><hr/>\n".$ADDED_METHODS;
+        }
+        else {
+            $ADDED_METHODS = "<h2>Added Methods <span".getStyle("M", "Added", $Added_Number).">&nbsp;$Added_Number&nbsp;</span></h2><hr/>\n".$ADDED_METHODS;
+        }
+        $ADDED_METHODS = $Anchor.$ADDED_METHODS.$TOP_REF."<br/>\n";
     }
     return $ADDED_METHODS;
 }
@@ -3965,7 +3985,13 @@ sub get_Report_Removed($)
         if($JoinReport) {
             $Anchor = "<a name='".$Level."_Removed'></a><a name='".$Level."_Withdrawn'></a>";
         }
-        $REMOVED_METHODS = $Anchor."<h2>Removed Methods ($Removed_Number)</h2><hr/>\n".$REMOVED_METHODS.$TOP_REF."<br/>\n";
+        if($OldStyle) {
+            $REMOVED_METHODS = "<h2>Removed Methods ($Removed_Number)</h2><hr/>\n".$REMOVED_METHODS;
+        }
+        else {
+            $REMOVED_METHODS = "<h2>Removed Methods <span".getStyle("M", "Removed", $Removed_Number).">&nbsp;$Removed_Number&nbsp;</span></h2><hr/>\n".$REMOVED_METHODS;
+        }
+        $REMOVED_METHODS = $Anchor.$REMOVED_METHODS.$TOP_REF."<br/>\n";
     }
     return $REMOVED_METHODS;
 }
@@ -4001,7 +4027,7 @@ sub get_Report_MethodProblems($$)
             }
         }
     }
-    my $Problems_Number = 0;
+    my $ProblemsNum = 0;
     foreach my $ArchiveName (sort {lc($a) cmp lc($b)} keys(%ReportMap))
     {
         foreach my $ClassName (sort {lc($a) cmp lc($b)} keys(%{$ReportMap{$ArchiveName}}))
@@ -4154,7 +4180,7 @@ sub get_Report_MethodProblems($$)
                             {
                                 $MethodProblemsReport .= "<tr><th>$ProblemNum</th><td>".$Change."</td><td>".$Effect."</td></tr>\n";
                                 $ProblemNum += 1;
-                                $Problems_Number += 1;
+                                $ProblemsNum += 1;
                             }
                         }
                     }
@@ -4165,7 +4191,14 @@ sub get_Report_MethodProblems($$)
                         $MethodProblemsReport = cut_Namespace($MethodProblemsReport, $NameSpace);
                         $ShowMethod = cut_Namespace($ShowMethod, $NameSpace);
                         
-                        $METHOD_PROBLEMS .= $ContentSpanStart."<span class='ext'>[+]</span> ".$ShowMethod." ($ProblemNum)".$ContentSpanEnd."<br/>\n";
+                        $METHOD_PROBLEMS .= $ContentSpanStart."<span class='ext'>[+]</span> ".$ShowMethod;
+                        if($OldStyle) {
+                            $METHOD_PROBLEMS .= " ($ProblemNum)";
+                        }
+                        else {
+                            $METHOD_PROBLEMS .= " <span".getStyle("M", $TargetSeverity, $ProblemNum).">&nbsp;$ProblemNum&nbsp;</span>";
+                        }
+                        $METHOD_PROBLEMS .= $ContentSpanEnd."<br/>\n";
                         $METHOD_PROBLEMS .= $ContentDivStart;
                         
                         if(not $Compact) {
@@ -4190,7 +4223,14 @@ sub get_Report_MethodProblems($$)
         { # Safe Changes
             $Title = "Other Changes in Methods";
         }
-        $METHOD_PROBLEMS = "<a name='".get_Anchor("Method", $Level, $TargetSeverity)."'></a>\n<h2>$Title ($Problems_Number)</h2><hr/>\n".$METHOD_PROBLEMS.$TOP_REF."<br/>\n";
+        if($OldStyle) {
+            $METHOD_PROBLEMS = "<h2>$Title ($ProblemsNum)</h2><hr/>\n".$METHOD_PROBLEMS;
+        }
+        else {
+            $METHOD_PROBLEMS = "<h2>$Title <span".getStyle("M", $TargetSeverity, $ProblemsNum).">&nbsp;$ProblemsNum&nbsp;</span></h2><hr/>\n".$METHOD_PROBLEMS;
+        }
+        $METHOD_PROBLEMS = "<a name='".get_Anchor("Method", $Level, $TargetSeverity)."'></a>\n".$METHOD_PROBLEMS;
+        $METHOD_PROBLEMS .= $TOP_REF."<br/>\n";
     }
     return $METHOD_PROBLEMS;
 }
@@ -4222,7 +4262,7 @@ sub get_Report_TypeProblems($$)
         }
     }
     
-    my $Problems_Number = 0;
+    my $ProblemsNum = 0;
     foreach my $ArchiveName (sort {lc($a) cmp lc($b)} keys(%ReportMap))
     {
         my ($HEADER_REPORT, %NameSpace_Type) = ();
@@ -4242,7 +4282,8 @@ sub get_Report_TypeProblems($$)
             {
                 my $TypeId = $TName_Tid{1}{$TypeName};
                 my $ProblemNum = 1;
-                my ($TypeProblemsReport, %Kinds_Locations, %Kinds_Target) = ();
+                my $TYPE_REPORT = "";
+                my (%Kinds_Locations, %Kinds_Target) = ();
                 foreach my $Kind (sort keys(%{$TypeChanges_Sev{$TypeName}}))
                 {
                     foreach my $Location (sort keys(%{$TypeChanges_Sev{$TypeName}{$Kind}}))
@@ -4671,15 +4712,15 @@ sub get_Report_TypeProblems($$)
                         }
                         if($Change)
                         {
-                            $TypeProblemsReport .= "<tr><th>$ProblemNum</th><td>".$Change."</td><td>".$Effect."</td></tr>\n";
+                            $TYPE_REPORT .= "<tr><th>$ProblemNum</th><td>".$Change."</td><td>".$Effect."</td></tr>\n";
                             $ProblemNum += 1;
-                            $Problems_Number += 1;
+                            $ProblemsNum += 1;
                             $Kinds_Locations{$Kind}{$Location} = 1;
                         }
                     }
                 }
-                
-                if($TypeProblemsReport)
+                $ProblemNum -= 1;
+                if($TYPE_REPORT)
                 {
                     my $Affected = "";
                     if(not defined $TypeInfo{1}{$TypeId}{"Annotation"}) {
@@ -4689,15 +4730,22 @@ sub get_Report_TypeProblems($$)
                     my $ShowType = $TypeName;
                     if($NameSpace)
                     {
-                        $TypeProblemsReport = cut_Namespace($TypeProblemsReport, $NameSpace);
+                        $TYPE_REPORT = cut_Namespace($TYPE_REPORT, $NameSpace);
                         $ShowType = cut_Namespace($ShowType, $NameSpace);
                         $Affected = cut_Namespace($Affected, $NameSpace);
                     }
                     
-                    $TYPE_PROBLEMS .= $ContentSpanStart."<span class='ext'>[+]</span> ".htmlSpecChars($ShowType)." (".($ProblemNum-1).")".$ContentSpanEnd."<br/>\n";
+                    $TYPE_PROBLEMS .= $ContentSpanStart."<span class='ext'>[+]</span> ".htmlSpecChars($ShowType);
+                    if($OldStyle) {
+                        $TYPE_PROBLEMS .= " ($ProblemNum)";
+                    }
+                    else {
+                        $TYPE_PROBLEMS .= " <span".getStyle("T", $TargetSeverity, $ProblemNum).">&nbsp;$ProblemNum&nbsp;</span>";
+                    }
+                    $TYPE_PROBLEMS .= $ContentSpanEnd."<br/>\n";
                     $TYPE_PROBLEMS .= $ContentDivStart."<table class='ptable'><tr>";
                     $TYPE_PROBLEMS .= "<th width='2%'></th><th width='47%'>Change</th><th>Effect</th>";
-                    $TYPE_PROBLEMS .= "</tr>$TypeProblemsReport</table>".$Affected."<br/><br/>$ContentDivEnd\n";
+                    $TYPE_PROBLEMS .= "</tr>$TYPE_REPORT</table>".$Affected."<br/><br/>$ContentDivEnd\n";
                 }
             }
             
@@ -4713,7 +4761,14 @@ sub get_Report_TypeProblems($$)
         { # Safe Changes
             $Title = "Other Changes in Data Types";
         }
-        $TYPE_PROBLEMS = "<a name='".get_Anchor("Type", $Level, $TargetSeverity)."'></a>\n<h2>$Title ($Problems_Number)</h2><hr/>\n".$TYPE_PROBLEMS.$TOP_REF."<br/>\n";
+        if($OldStyle) {
+            $TYPE_PROBLEMS = "<h2>$Title ($ProblemsNum)</h2><hr/>\n".$TYPE_PROBLEMS;
+        }
+        else {
+            $TYPE_PROBLEMS = "<h2>$Title <span".getStyle("T", $TargetSeverity, $ProblemsNum).">&nbsp;$ProblemsNum&nbsp;</span></h2><hr/>\n".$TYPE_PROBLEMS;
+        }
+        $TYPE_PROBLEMS = "<a name='".get_Anchor("Type", $Level, $TargetSeverity)."'></a>\n".$TYPE_PROBLEMS;
+        $TYPE_PROBLEMS .= $TOP_REF."<br/>\n";
     }
     return $TYPE_PROBLEMS;
 }
@@ -5144,13 +5199,13 @@ sub getCssStyles()
         text-align:left;
         font-size:0.94em;
         white-space:nowrap;
-        border:1px inset gray;
+        border:1px inset Gray;
         padding: 3px;
     }
     table.summary td {
         text-align:right;
         white-space:nowrap;
-        border:1px inset gray;
+        border:1px inset Gray;
         padding: 3px 5px 3px 10px;
     }
     span.mngl {
@@ -5168,32 +5223,43 @@ sub getCssStyles()
     }
     span.focus_p {
         font-style:italic;
-        background-color:#FFCCCC;
+        background-color:#DCDCDC;
     }
     span.nowrap {
         white-space:nowrap;
     }
-    td.passed {
+    .passed {
         background-color:#CCFFCC;
+        font-weight:100;
     }
-    td.warning {
+    .warning {
         background-color:#F4F4AF;
+        font-weight:100;
     }
-    td.failed {
+    .failed {
         background-color:#FFCCCC;
+        font-weight:100;
     }
-    td.new {
+    .new {
         background-color:#C6DEFF;
+        font-weight:100;
     }
     
-    td.compatible {
+    .compatible {
         background-color:#CCFFCC;
+        font-weight:100;
     }
-    td.almost_compatible {
+    .almost_compatible {
         background-color:#FFDAA3;
+        font-weight:100;
     }
-    td.incompatible {
+    .incompatible {
         background-color:#FFCCCC;
+        font-weight:100;
+    }
+    .gray {
+        background-color:#DCDCDC;
+        font-weight:100;
     }
     
     .top_ref {
@@ -6818,7 +6884,9 @@ sub readArchive($$)
     {
         $ClassPath=~s/\.class\Z//g;
         my $ClassName = get_filename($ClassPath);
-        next if($ClassName=~/\$\d/);
+        if($ClassName=~/\$\d/) {
+            next;
+        }
         $ClassPath = cut_path_prefix($ClassPath, $ExtractPath); # javap decompiler accepts relative paths only
         
         my $ClassDir = get_dirname($ClassPath);
@@ -6838,10 +6906,6 @@ sub readArchive($$)
         
         $ClassName=~s/\$/./g; # real name for GlyphView$GlyphPainter is GlyphView.GlyphPainter
         push(@Classes, $ClassPath);
-        
-        if($LibVersion) {
-            $LibClasses{$LibVersion}{$ClassName} = 1;
-        }
     }
     
     if($#Classes!=-1)
@@ -7898,7 +7962,6 @@ sub read_API_Dump($$$)
             if($MethodInfo{$LibVersion}{$Method}{"Abstract"}) {
                 $Class_AbstractMethods{$LibVersion}{get_TypeName($ClassId, $LibVersion)}{$Method} = 1;
             }
-            $LibClasses{$LibVersion}{get_ShortName($ClassId, $LibVersion)} = 1;
         }
     }
     
