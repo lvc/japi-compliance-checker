@@ -2010,7 +2010,7 @@ sub checkDefaultImpl($$$)
     
     foreach my $Method (keys(%{$Class_AbstractMethods{$LibVersion}{$SuperClassName}}))
     {
-        if(my $Overridden = findMethod_Class($Method, $LibVersion, $ClassName, $LibVersion))
+        if(my $Overridden = findMethod_Class($Method, $ClassName, $LibVersion))
         {
             if($MethodInfo{$LibVersion}{$Overridden}{"Abstract"}) {
                 return 0;
