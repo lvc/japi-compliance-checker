@@ -21,7 +21,7 @@
 #  MS Windows
 #    - JDK or OpenJDK (javap, javac)
 #    - Active Perl 5 (5.8 or newer)
-#  
+#
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License or the GNU Lesser
 # General Public License as published by the Free Software Foundation.
@@ -466,24 +466,31 @@ sub HELP_MESSAGE()
 my %TypeProblems_Kind=(
     "Binary"=>{
         "NonAbstract_Class_Added_Abstract_Method"=>"High",
-        "Abstract_Class_Added_Abstract_Method"=>"Medium",
+        "Abstract_Class_Added_Abstract_Method"=>"Safe",
+        "Abstract_Class_Added_Abstract_Method_Invoked_By_Others"=>"Medium",
         "Class_Removed_Abstract_Method"=>"High",
-        "Interface_Added_Abstract_Method"=>"Medium",
+        "Interface_Added_Abstract_Method"=>"Safe",
+        "Interface_Added_Abstract_Method_Invoked_By_Others"=>"Medium",
         "Interface_Removed_Abstract_Method"=>"High",
         "Removed_Class"=>"High",
         "Removed_Interface"=>"High",
         "Class_Method_Became_Abstract"=>"High",
         "Class_Method_Became_NonAbstract"=>"Low",
+        "Interface_Method_Became_NonDefault"=>"High",
+        "Interface_Method_Became_Default"=>"Safe",
         "Added_Super_Class"=>"Low",
-        "Abstract_Class_Added_Super_Abstract_Class"=>"Medium",
+        "Abstract_Class_Added_Super_Abstract_Class"=>"Safe",
+        "Abstract_Class_Added_Super_Abstract_Class_Invoked_By_Others"=>"Medium",
         "Removed_Super_Class"=>"Medium",
         "Changed_Super_Class"=>"Medium",
-        "Abstract_Class_Added_Super_Interface"=>"Medium",
+        "Abstract_Class_Added_Super_Interface"=>"Safe",
+        "Abstract_Class_Added_Super_Interface_Invoked_By_Others"=>"Medium",
         "Abstract_Class_Added_Super_Interface_With_Implemented_Methods"=>"Safe",
         "Class_Removed_Super_Interface"=>"High",
-        "Interface_Added_Super_Interface"=>"Medium",
-        "Interface_Added_Super_Interface_With_Implemented_Methods"=>"Safe",
+        "Interface_Added_Super_Interface"=>"Safe",
+        "Interface_Added_Super_Interface_Used_By_Others"=>"Medium",
         "Interface_Added_Super_Constant_Interface"=>"Low",
+        "Interface_Added_Super_Interface_With_Implemented_Methods"=>"Safe",
         "Interface_Removed_Super_Interface"=>"High",
         "Interface_Removed_Super_Constant_Interface"=>"Safe",
         "Class_Became_Interface"=>"High",
@@ -499,6 +506,7 @@ my %TypeProblems_Kind=(
         "Changed_Field_Type"=>"High",
         "Changed_Field_Access"=>"High",
         "Changed_Final_Field_Value"=>"Medium",
+        "Changed_Final_Version_Field_Value"=>"Low",
         "Field_Became_Final"=>"Medium",
         "Field_Became_NonFinal"=>"Low",
         "NonConstant_Field_Became_Static"=>"High",
@@ -509,22 +517,30 @@ my %TypeProblems_Kind=(
     "Source"=>{
         "NonAbstract_Class_Added_Abstract_Method"=>"High",
         "Abstract_Class_Added_Abstract_Method"=>"High",
+        "Abstract_Class_Added_Abstract_Method_Invoked_By_Others"=>"High",
         "Interface_Added_Abstract_Method"=>"High",
+        "Interface_Added_Abstract_Method_Invoked_By_Others"=>"High",
         "Class_Removed_Abstract_Method"=>"High",
         "Interface_Removed_Abstract_Method"=>"High",
         "Removed_Class"=>"High",
         "Removed_Interface"=>"High",
         "Class_Method_Became_Abstract"=>"High",
+        "Class_Method_Became_NonAbstract"=>"Safe",
+        "Interface_Method_Became_NonDefault"=>"High",
+        "Interface_Method_Became_Default"=>"Safe",
         "Added_Super_Class"=>"Low",
         "Abstract_Class_Added_Super_Abstract_Class"=>"High",
+        "Abstract_Class_Added_Super_Abstract_Class_Invoked_By_Others"=>"High",
         "Removed_Super_Class"=>"Medium",
         "Changed_Super_Class"=>"Medium",
         "Abstract_Class_Added_Super_Interface"=>"High",
+        "Abstract_Class_Added_Super_Interface_Invoked_By_Others"=>"High",
         "Abstract_Class_Added_Super_Interface_With_Implemented_Methods"=>"Safe",
         "Class_Removed_Super_Interface"=>"High",
         "Interface_Added_Super_Interface"=>"High",
-        "Interface_Added_Super_Interface_With_Implemented_Methods"=>"Safe",
+        "Interface_Added_Super_Interface_Used_By_Others"=>"High",
         "Interface_Added_Super_Constant_Interface"=>"Low",
+        "Interface_Added_Super_Interface_With_Implemented_Methods"=>"Safe",
         "Interface_Removed_Super_Interface"=>"High",
         "Interface_Removed_Super_Constant_Interface"=>"High",
         "Class_Became_Interface"=>"High",
@@ -558,6 +574,8 @@ my %MethodProblems_Kind=(
         "Method_Became_NonSynchronized"=>"Low",
         "Method_Became_Abstract"=>"High",
         "Method_Became_NonAbstract"=>"Low",
+        "Method_Became_NonDefault"=>"High",
+        "Method_Became_Default"=>"Safe",
         "NonAbstract_Method_Added_Checked_Exception"=>"Low",
         "NonAbstract_Method_Removed_Checked_Exception"=>"Low",
         "Added_Unchecked_Exception"=>"Low",
@@ -574,6 +592,9 @@ my %MethodProblems_Kind=(
         "NonStatic_Method_Became_Final"=>"Medium",
         "Changed_Method_Access"=>"High",
         "Method_Became_Abstract"=>"High",
+        "Method_Became_NonAbstract"=>"Safe",
+        "Method_Became_NonDefault"=>"High",
+        "Method_Became_Default"=>"Safe",
         "Abstract_Method_Added_Checked_Exception"=>"Medium",
         "NonAbstract_Method_Added_Checked_Exception"=>"Medium",
         "Abstract_Method_Removed_Checked_Exception"=>"Medium",
@@ -903,7 +924,7 @@ sub readDescriptor($$)
     $Content=~s/<\!--(.|\n)+?-->//g;
     $Descriptor{$LibVersion}{"Version"} = parseTag(\$Content, "version");
     $Descriptor{$LibVersion}{"Version"} = $TargetVersion{$LibVersion} if($TargetVersion{$LibVersion});
-    if(not $Descriptor{$LibVersion}{"Version"}) {
+    if($Descriptor{$LibVersion}{"Version"} eq "") {
         exitStatus("Error", "version in the $DName is not specified (<version> section)");
     }
     
@@ -1368,63 +1389,6 @@ my %Severity_Val=(
     "Safe"=>-1
 );
 
-sub getProblemSeverity($$$$)
-{
-    my ($Level, $Kind, $TypeName, $Target) = @_;
-    if($Level eq "Source")
-    {
-        if($TypeProblems_Kind{$Level}{$Kind}) {
-            return $TypeProblems_Kind{$Level}{$Kind};
-        }
-        elsif($MethodProblems_Kind{$Level}{$Kind}) {
-            return $MethodProblems_Kind{$Level}{$Kind};
-        }
-    }
-    elsif($Level eq "Binary")
-    {
-        if($Kind eq "Interface_Added_Abstract_Method"
-        or $Kind eq "Abstract_Class_Added_Abstract_Method")
-        {
-            if(not keys(%{$MethodUsed{2}{$Target}}))
-            {
-                if($Quick) {
-                    return "Low";
-                }
-                else {
-                    return "Safe";
-                }
-            }
-        }
-        elsif($Kind eq "Interface_Added_Super_Interface"
-        or $Kind eq "Abstract_Class_Added_Super_Interface"
-        or $Kind eq "Abstract_Class_Added_Super_Abstract_Class")
-        {
-            if(not keys(%{$ClassMethod_AddedUsed{$TypeName}}))
-            {
-                if($Quick) {
-                    return "Low";
-                }
-                else {
-                    return "Safe";
-                }
-            }
-        }
-        elsif($Kind eq "Changed_Final_Field_Value")
-        {
-            if($Target=~/(\A|_)(VERSION|VERNUM|BUILDNUMBER|BUILD)(_|\Z)/i) {
-                return "Low";
-            }
-        }
-        if($TypeProblems_Kind{$Level}{$Kind}) {
-            return $TypeProblems_Kind{$Level}{$Kind};
-        }
-        elsif($MethodProblems_Kind{$Level}{$Kind}) {
-            return $MethodProblems_Kind{$Level}{$Kind};
-        }
-    }
-    return "Low";
-}
-
 sub isRecurType($$)
 {
     foreach (@RecurTypes)
@@ -1473,6 +1437,22 @@ sub get_ConstantValue($$)
     else {
         return $Value;
     }
+}
+
+sub getInvoked($)
+{
+    my $TName = $_[0];
+    
+    if(my @Invoked = sort keys(%{$ClassMethod_AddedUsed{$TName}}))
+    {
+        my $MFirst = $Invoked[0];
+        my $MSignature = unmangle($MFirst);
+        $MSignature=~s/\A.+\.(\w+\()/$1/g; # short name
+        my $InvokedBy = $ClassMethod_AddedUsed{$TName}{$MFirst};
+        return ($MSignature, $InvokedBy);
+    }
+    
+    return ();
 }
 
 sub mergeTypes($$)
@@ -1555,17 +1535,21 @@ sub mergeTypes($$)
         {
             if($Type1{"Abstract"})
             {
-                my $Add_Effect = "";
                 if(my @InvokedBy = sort keys(%{$MethodUsed{2}{$AddedMethod}}))
                 {
-                    my $MFirst = $InvokedBy[0];
-                    $Add_Effect = " Added abstract method is called in 2nd library version by the method ".black_Name($MFirst, 1)." and may not be implemented by old clients.";
+                    %{$SubProblems{"Abstract_Class_Added_Abstract_Method_Invoked_By_Others"}{get_SFormat($AddedMethod)}} = (
+                        "Type_Name"=>$Type1{"Name"},
+                        "Type_Type"=>$Type1{"Type"},
+                        "Target"=>$AddedMethod,
+                        "InvokedBy"=>$InvokedBy[0]  );
                 }
-                %{$SubProblems{"Abstract_Class_Added_Abstract_Method"}{get_SFormat($AddedMethod)}} = (
-                    "Type_Name"=>$Type1{"Name"},
-                    "Type_Type"=>$Type1{"Type"},
-                    "Target"=>$AddedMethod,
-                    "Add_Effect"=>$Add_Effect  );
+                else
+                {
+                    %{$SubProblems{"Abstract_Class_Added_Abstract_Method"}{get_SFormat($AddedMethod)}} = (
+                        "Type_Name"=>$Type1{"Name"},
+                        "Type_Type"=>$Type1{"Type"},
+                        "Target"=>$AddedMethod  );
+                }
             }
             else
             {
@@ -1577,17 +1561,21 @@ sub mergeTypes($$)
         }
         else
         {
-            my $Add_Effect = "";
             if(my @InvokedBy = sort keys(%{$MethodUsed{2}{$AddedMethod}}))
             {
-                my $MFirst = $InvokedBy[0];
-                $Add_Effect = " Added abstract method is called in 2nd library version by the method ".black_Name($MFirst, 1)." and may not be implemented by old clients.";
+                %{$SubProblems{"Interface_Added_Abstract_Method_Invoked_By_Others"}{get_SFormat($AddedMethod)}} = (
+                    "Type_Name"=>$Type1{"Name"},
+                    "Type_Type"=>$Type1{"Type"},
+                    "Target"=>$AddedMethod,
+                    "InvokedBy"=>$InvokedBy[0]  );
             }
-            %{$SubProblems{"Interface_Added_Abstract_Method"}{get_SFormat($AddedMethod)}} = (
-                "Type_Name"=>$Type1{"Name"},
-                "Type_Type"=>$Type1{"Type"},
-                "Target"=>$AddedMethod,
-                "Add_Effect"=>$Add_Effect  );
+            else
+            {
+                %{$SubProblems{"Interface_Added_Abstract_Method"}{get_SFormat($AddedMethod)}} = (
+                    "Type_Name"=>$Type1{"Name"},
+                    "Type_Type"=>$Type1{"Type"},
+                    "Target"=>$AddedMethod  );
+            }
         }
     }
     foreach my $RemovedMethod (keys(%{$RemovedMethod_Abstract{$Type1{"Name"}}}))
@@ -1625,19 +1613,20 @@ sub mergeTypes($$)
                     and $Type1{"Abstract"} and $Type2{"Abstract"}
                     and keys(%{$Class_AbstractMethods{2}{$SuperClass2{"Name"}}}))
                     {
-                        my $Add_Effect = "";
-                        if(my @Invoked = sort keys(%{$ClassMethod_AddedUsed{$Type1{"Name"}}}))
+                        if(my ($Invoked, $InvokedBy) = getInvoked($Type1{"Name"}))
                         {
-                            my $MFirst = $Invoked[0];
-                            my $MSignature = unmangle($MFirst);
-                            $MSignature=~s/\A.+\.(\w+\()/$1/g; # short name
-                            my $InvokedBy = $ClassMethod_AddedUsed{$Type1{"Name"}}{$MFirst};
-                            $Add_Effect = " Abstract method ".black_Name_Str(htmlSpecChars($MSignature))." from the added abstract super-class is called by the method ".black_Name($InvokedBy, 2)." in 2nd library version and may not be implemented by old clients.";
+                            %{$SubProblems{"Abstract_Class_Added_Super_Abstract_Class_Invoked_By_Others"}{""}} = (
+                                "Type_Name"=>$Type1{"Name"},
+                                "Target"=>$SuperClass2{"Name"},
+                                "Invoked"=>$Invoked,
+                                "InvokedBy"=>$InvokedBy  );
                         }
-                        %{$SubProblems{"Abstract_Class_Added_Super_Abstract_Class"}{""}} = (
-                            "Type_Name"=>$Type1{"Name"},
-                            "Target"=>$SuperClass2{"Name"},
-                            "Add_Effect"=>$Add_Effect  );
+                        else
+                        {
+                            %{$SubProblems{"Abstract_Class_Added_Super_Abstract_Class"}{""}} = (
+                                "Type_Name"=>$Type1{"Name"},
+                                "Target"=>$SuperClass2{"Name"}  );
+                        }
                     }
                     else
                     {
@@ -1686,24 +1675,25 @@ sub mergeTypes($$)
                     if($HaveMethods and checkDefaultImpl(2, $SuperInterface, $Type2{"Name"}))
                     {
                         %{$SubProblems{"Interface_Added_Super_Interface_With_Implemented_Methods"}{get_SFormat($SuperInterface)}} = (
-                            "Type_Name"=>$Type2{"Name"},
+                            "Type_Name"=>$Type1{"Name"},
                             "Target"=>$SuperInterface  );
                     }
                     else
                     {
-                        my $Add_Effect = "";
-                        if(my @Invoked = sort keys(%{$ClassMethod_AddedUsed{$Type1{"Name"}}}))
+                        if(my ($Invoked, $InvokedBy) = getInvoked($Type1{"Name"}))
                         {
-                            my $MFirst = $Invoked[0];
-                            my $MSignature = unmangle($MFirst);
-                            $MSignature=~s/\A.+\.(\w+\()/$1/g; # short name
-                            my $InvokedBy = $ClassMethod_AddedUsed{$Type1{"Name"}}{$MFirst};
-                            $Add_Effect = " Abstract method ".black_Name_Str(htmlSpecChars($MSignature))." from the added super-interface is called by the method ".black_Name($InvokedBy, 2)." in 2nd library version and may not be implemented by old clients.";
+                            %{$SubProblems{"Interface_Added_Super_Interface_Used_By_Others"}{get_SFormat($SuperInterface)}} = (
+                                "Type_Name"=>$Type1{"Name"},
+                                "Target"=>$SuperInterface,
+                                "Invoked"=>$Invoked,
+                                "InvokedBy"=>$InvokedBy  );
                         }
-                        %{$SubProblems{"Interface_Added_Super_Interface"}{get_SFormat($SuperInterface)}} = (
-                            "Type_Name"=>$Type1{"Name"},
-                            "Target"=>$SuperInterface,
-                            "Add_Effect"=>$Add_Effect  );
+                        else
+                        {
+                            %{$SubProblems{"Interface_Added_Super_Interface"}{get_SFormat($SuperInterface)}} = (
+                                "Type_Name"=>$Type1{"Name"},
+                                "Target"=>$SuperInterface  );
+                        }
                     }
                 }
                 elsif($HaveFields)
@@ -1729,19 +1719,20 @@ sub mergeTypes($$)
                     }
                     else
                     {
-                        my $Add_Effect = "";
-                        if(my @Invoked = sort keys(%{$ClassMethod_AddedUsed{$Type1{"Name"}}}))
+                        if(my ($Invoked, $InvokedBy) = getInvoked($Type1{"Name"}))
                         {
-                            my $MFirst = $Invoked[0];
-                            my $MSignature = unmangle($MFirst);
-                            $MSignature=~s/\A.+\.(\w+\()/$1/g; # short name
-                            my $InvokedBy = $ClassMethod_AddedUsed{$Type1{"Name"}}{$MFirst};
-                            $Add_Effect = " Abstract method ".black_Name_Str(htmlSpecChars($MSignature))." from the added super-interface is called by the method ".black_Name($InvokedBy, 2)." in 2nd library version and may not be implemented by old clients.";
+                            %{$SubProblems{"Abstract_Class_Added_Super_Interface_Invoked_By_Others"}{get_SFormat($SuperInterface)}} = (
+                                "Type_Name"=>$Type1{"Name"},
+                                "Target"=>$SuperInterface,
+                                "Invoked"=>$Invoked,
+                                "InvokedBy"=>$InvokedBy  );
                         }
-                        %{$SubProblems{"Abstract_Class_Added_Super_Interface"}{get_SFormat($SuperInterface)}} = (
-                            "Type_Name"=>$Type1{"Name"},
-                            "Target"=>$SuperInterface,
-                            "Add_Effect"=>$Add_Effect  );
+                        else
+                        {
+                            %{$SubProblems{"Abstract_Class_Added_Super_Interface"}{get_SFormat($SuperInterface)}} = (
+                                "Type_Name"=>$Type1{"Name"},
+                                "Target"=>$SuperInterface  );
+                        }
                     }
                 }
             }
@@ -1771,7 +1762,7 @@ sub mergeTypes($$)
                         "Target"=>$SuperInterface  );
                 }
                 else {
-                    # ???
+                    # empty interface
                 }
             }
             else
@@ -1912,12 +1903,24 @@ sub mergeTypes($$)
                 if($Type1{"Fields"}{$Field_Name}{"Final"}
                 and $Type2{"Fields"}{$Field_Name}{"Final"})
                 {
-                    %{$SubProblems{"Changed_Final_Field_Value"}{$Field_Name}}=(
-                        "Target"=>$Field_Name,
-                        "Field_Type"=>$FieldType1{"Name"},
-                        "Type_Name"=>$Type1{"Name"},
-                        "Old_Value"=>$Value1,
-                        "New_Value"=>$Value2  );
+                    if($Field_Name=~/(\A|_)(VERSION|VERNUM|BUILDNUMBER|BUILD)(_|\Z)/i)
+                    {
+                        %{$SubProblems{"Changed_Final_Version_Field_Value"}{$Field_Name}}=(
+                            "Target"=>$Field_Name,
+                            "Field_Type"=>$FieldType1{"Name"},
+                            "Type_Name"=>$Type1{"Name"},
+                            "Old_Value"=>$Value1,
+                            "New_Value"=>$Value2  );
+                    }
+                    else
+                    {
+                        %{$SubProblems{"Changed_Final_Field_Value"}{$Field_Name}}=(
+                            "Target"=>$Field_Name,
+                            "Field_Type"=>$FieldType1{"Name"},
+                            "Type_Name"=>$Type1{"Name"},
+                            "Old_Value"=>$Value1,
+                            "New_Value"=>$Value2  );
+                    }
                 }
             }
         }
@@ -2605,6 +2608,27 @@ sub mergeMethods()
                     "Target"=>$Method  );
             }
         }
+        elsif($Class1{"Type"} eq "interface"
+        and $Class2{"Type"} eq "interface")
+        {
+            if(not $MethodInfo{1}{$Method}{"Abstract"}
+            and $MethodInfo{2}{$Method}{"Abstract"})
+            {
+                %{$CompatProblems{$Method}{"Method_Became_NonDefault"}{""}} = ();
+                %{$CompatProblems{$Method}{"Interface_Method_Became_NonDefault"}{"this.".get_SFormat($Method)}} = (
+                    "Type_Name"=>$Class1{"Name"},
+                    "Target"=>$Method  );
+            }
+            elsif($MethodInfo{1}{$Method}{"Abstract"}
+            and not $MethodInfo{2}{$Method}{"Abstract"})
+            {
+                %{$CompatProblems{$Method}{"Method_Became_Default"}{""}} = ();
+                %{$CompatProblems{$Method}{"Interface_Method_Became_Default"}{"this.".get_SFormat($Method)}} = (
+                    "Type_Name"=>$Class1{"Name"},
+                    "Target"=>$Method  );
+            }
+        }
+        
         my %Exceptions_Old = map {get_TypeName($_, 1) => $_} keys(%{$MethodInfo{1}{$Method}{"Exceptions"}});
         my %Exceptions_New = map {get_TypeName($_, 2) => $_} keys(%{$MethodInfo{2}{$Method}{"Exceptions"}});
         foreach my $Exception (keys(%Exceptions_Old))
@@ -2800,7 +2824,7 @@ sub black_Name($$)
     return "<span class='iname_b'>".highLight_Signature($M, $V)."</span>";
 }
 
-sub black_Name_Str($$)
+sub black_Name_S($)
 {
     my $Name = $_[0];
     $Name=~s!\A(\w+)!<span class='iname_b'>$1</span>&#160;!g;
@@ -3382,14 +3406,12 @@ sub get_TypeProblems_Count($$)
         my %Kinds_Target = ();
         foreach my $Kind (sort keys(%{$TypeChanges{$Level}{$Type_Name}}))
         {
+            if($TypeProblems_Kind{$Level}{$Kind} ne $TargetSeverity) {
+                next;
+            }
             foreach my $Location (sort keys(%{$TypeChanges{$Level}{$Type_Name}{$Kind}}))
             {
                 my $Target = $TypeChanges{$Level}{$Type_Name}{$Kind}{$Location}{"Target"};
-                my $Severity = getProblemSeverity($Level, $Kind, $Type_Name, $Target);
-                
-                if($Severity ne $TargetSeverity) {
-                    next;
-                }
                 
                 if($Kinds_Target{$Kind}{$Target}) {
                     next;
@@ -3468,13 +3490,10 @@ sub get_Summary($)
     {
         foreach my $Kind (sort keys(%{$CompatProblems{$Method}}))
         {
-            if($MethodProblems_Kind{$Level}{$Kind})
+            if(my $Severity = $MethodProblems_Kind{$Level}{$Kind})
             {
                 foreach my $Location (sort keys(%{$CompatProblems{$Method}{$Kind}}))
                 {
-                    my $Type_Name = $CompatProblems{$Method}{$Kind}{$Location}{"Type_Name"};
-                    my $Target = $CompatProblems{$Method}{$Kind}{$Location}{"Target"};
-                    my $Severity = getProblemSeverity($Level, $Kind, $Type_Name, $Target);
                     if($Kind eq "Added_Method")
                     {
                         if($Level eq "Source")
@@ -3521,14 +3540,13 @@ sub get_Summary($)
     }
     
     my %MethodTypeIndex = ();
-    my %SeverityIndex = ();
     
     foreach my $Method (sort keys(%CompatProblems))
     {
         my @Kinds = sort keys(%{$CompatProblems{$Method}});
         foreach my $Kind (@Kinds)
         {
-            if($TypeProblems_Kind{$Level}{$Kind})
+            if(my $Severity = $TypeProblems_Kind{$Level}{$Kind})
             {
                 my @Locs = sort {length($a)<=>length($b)} sort keys(%{$CompatProblems{$Method}{$Kind}});
                 foreach my $Location (@Locs)
@@ -3542,14 +3560,6 @@ sub get_Summary($)
                     }
                     $MethodTypeIndex{$Method}{$Type_Name}{$Kind}{$Target} = 1;
                     $TypeChanges{$Level}{$Type_Name}{$Kind}{$Location} = $CompatProblems{$Method}{$Kind}{$Location};
-                    
-                    my $Severity = undef;
-                    if(defined $SeverityIndex{$Type_Name}{$Kind}{$Target}) {
-                        $Severity = $SeverityIndex{$Type_Name}{$Kind}{$Target};
-                    }
-                    else {
-                        $Severity = getProblemSeverity($Level, $Kind, $Type_Name, $Target);
-                    }
                     
                     if(($Severity ne "Low" or $StrictCompat)
                     and $Severity ne "Safe")
@@ -3570,7 +3580,6 @@ sub get_Summary($)
     }
     
     %MethodTypeIndex = (); # clear memory
-    %SeverityIndex = (); # clear memory
     
     
     $T_Problems_High = get_TypeProblems_Count("High", $Level);
@@ -4016,26 +4025,24 @@ sub get_Report_MethodProblems($$)
     
     foreach my $Method (sort keys(%CompatProblems))
     {
+        my $ArchiveName = $MethodInfo{1}{$Method}{"Archive"};
+        my $ClassName = get_ShortName($MethodInfo{1}{$Method}{"Class"}, 1);
+        
         foreach my $Kind (sort keys(%{$CompatProblems{$Method}}))
         {
-            if($MethodProblems_Kind{$Level}{$Kind}
-            and $Kind ne "Added_Method" and $Kind ne "Removed_Method")
+            if($Kind eq "Added_Method"
+            or $Kind eq "Removed_Method") {
+                next;
+            }
+            
+            if(my $Severity = $MethodProblems_Kind{$Level}{$Kind})
             {
-                my $ArchiveName = $MethodInfo{1}{$Method}{"Archive"};
-                my $ClassName = get_ShortName($MethodInfo{1}{$Method}{"Class"}, 1);
-                
-                foreach my $Location (sort keys(%{$CompatProblems{$Method}{$Kind}}))
-                {
-                    my $Type_Name = $CompatProblems{$Method}{$Kind}{$Location}{"Type_Name"};
-                    my $Target = $CompatProblems{$Method}{$Kind}{$Location}{"Target"};
-                    my $Severity = getProblemSeverity($Level, $Kind, $Type_Name, $Target);
-                    
-                    if($Severity eq $TargetSeverity)
-                    {
-                        $MethodChanges{$Method}{$Kind} = $CompatProblems{$Method}{$Kind};
-                        $ReportMap{$ArchiveName}{$ClassName}{$Method} = 1;
-                    }
+                if($Severity ne $TargetSeverity) {
+                    next;
                 }
+                
+                $MethodChanges{$Method}{$Kind} = $CompatProblems{$Method}{$Kind};
+                $ReportMap{$ArchiveName}{$ClassName}{$Method} = 1;
             }
         }
     }
@@ -4064,7 +4071,7 @@ sub get_Report_MethodProblems($$)
                 {
                     my $ShortSignature = get_Signature($Method, 1, "Short");
                     my $ClassName_Full = get_TypeName($MethodInfo{1}{$Method}{"Class"}, 1);
-                    my $MethodProblemsReport = "";
+                    my $METHOD_REPORT = "";
                     my $ProblemNum = 1;
                     foreach my $Kind (sort keys(%{$MethodChanges{$Method}}))
                     {
@@ -4126,7 +4133,32 @@ sub get_Report_MethodProblems($$)
                             elsif($Kind eq "Method_Became_NonAbstract")
                             {
                                 $Change = "Method became <b>non-abstract</b>.\n";
-                                $Effect = "A client program may change behavior.";
+                                if($Level eq "Binary") {
+                                    $Effect = "A client program may change behavior.";
+                                }
+                                else {
+                                    $Effect = "No effect.";
+                                }
+                            }
+                            elsif($Kind eq "Method_Became_Default")
+                            {
+                                $Change = "Method became <b>default</b>.\n";
+                                if($Level eq "Binary") {
+                                    $Effect = "No effect.";
+                                }
+                                else {
+                                    $Effect = "No effect.";
+                                }
+                            }
+                            elsif($Kind eq "Method_Became_NonDefault")
+                            {
+                                $Change = "Method became <b>non-default</b>.\n";
+                                if($Level eq "Binary") {
+                                    $Effect = "A client program trying to create an instance of a class may be interrupted by <b>AbstractMethodError</b> exception.";
+                                }
+                                else {
+                                    $Effect = "Recompilation of a client program may be terminated with the message: A client class C is not abstract and does not override abstract method ".htmlSpecChars($ShortSignature)." in ".htmlSpecChars($ClassName_Full).".";
+                                }
                             }
                             elsif($Kind eq "Method_Became_Synchronized")
                             {
@@ -4190,18 +4222,21 @@ sub get_Report_MethodProblems($$)
                             }
                             if($Change)
                             {
-                                $MethodProblemsReport .= "<tr><th>$ProblemNum</th><td>".$Change."</td><td>".$Effect."</td></tr>\n";
+                                $METHOD_REPORT .= "<tr><th>$ProblemNum</th><td>".$Change."</td><td>".$Effect."</td></tr>\n";
                                 $ProblemNum += 1;
                                 $ProblemsNum += 1;
                             }
                         }
                     }
                     $ProblemNum -= 1;
-                    if($MethodProblemsReport)
+                    if($METHOD_REPORT)
                     {
                         my $ShowMethod = highLight_Signature_Italic_Color($Method, 1);
-                        $MethodProblemsReport = cut_Namespace($MethodProblemsReport, $NameSpace);
-                        $ShowMethod = cut_Namespace($ShowMethod, $NameSpace);
+                        if($NameSpace)
+                        {
+                            $METHOD_REPORT = cut_Namespace($METHOD_REPORT, $NameSpace);
+                            $ShowMethod = cut_Namespace($ShowMethod, $NameSpace);
+                        }
                         
                         $METHOD_PROBLEMS .= $ContentSpanStart."<span class='ext'>[+]</span> ".$ShowMethod;
                         if($OldStyle) {
@@ -4217,7 +4252,7 @@ sub get_Report_MethodProblems($$)
                             $METHOD_PROBLEMS .= "<span class='mngl'>&#160;&#160;&#160;[mangled: <b>".htmlSpecChars($Method)."</b>]</span><br/>\n";
                         }
                         
-                        $METHOD_PROBLEMS .= "<table class='ptable'><tr><th width='2%'></th><th width='47%'>Change</th><th>Effect</th></tr>$MethodProblemsReport</table><br/>$ContentDivEnd\n";
+                        $METHOD_PROBLEMS .= "<table class='ptable'><tr><th width='2%'></th><th width='47%'>Change</th><th>Effect</th></tr>$METHOD_REPORT</table><br/>$ContentDivEnd\n";
                         
                     }
                 }
@@ -4260,16 +4295,16 @@ sub get_Report_TypeProblems($$)
         
         foreach my $Kind (keys(%{$TypeChanges{$Level}{$TypeName}}))
         {
+            my $Severity = $TypeProblems_Kind{$Level}{$Kind};
+            
+            if($Severity ne $TargetSeverity) {
+                next;
+            }
+            
             foreach my $Location (keys(%{$TypeChanges{$Level}{$TypeName}{$Kind}}))
             {
-                my $Target = $TypeChanges{$Level}{$TypeName}{$Kind}{$Location}{"Target"};
-                my $Severity = getProblemSeverity($Level, $Kind, $TypeName, $Target);
-                
-                if($Severity eq $TargetSeverity)
-                {
-                    $ReportMap{$ArchiveName}{$TypeName} = 1;
-                    $TypeChanges_Sev{$TypeName}{$Kind}{$Location} = $TypeChanges{$Level}{$TypeName}{$Kind}{$Location};
-                }
+                $ReportMap{$ArchiveName}{$TypeName} = 1;
+                $TypeChanges_Sev{$TypeName}{$Kind}{$Location} = $TypeChanges{$Level}{$TypeName}{$Kind}{$Location};
             }
         }
     }
@@ -4316,85 +4351,107 @@ sub get_Report_TypeProblems($$)
                         my $Field_Type = $Problems{"Field_Type"};
                         my $Field_Value = $Problems{"Field_Value"};
                         my $Type_Type = $Problems{"Type_Type"};
-                        my $Add_Effect = $Problems{"Add_Effect"};
                         
                         if($Kind eq "NonAbstract_Class_Added_Abstract_Method")
                         {
-                            my $ShortSignature = get_Signature($Target, 2, "Short");
-                            my $ClassName_Full = get_TypeName($MethodInfo{2}{$Target}{"Class"}, 2);
                             $Change = "Abstract method ".black_Name($Target, 2)." has been added to this $Type_Type.";
                             if($Level eq "Binary") {
                                 $Effect = "This class became <b>abstract</b> and a client program may be interrupted by <b>InstantiationError</b> exception.";
                             }
                             else {
-                                $Effect = "Recompilation of a client program may be terminated with the message: a client class C is not abstract and does not override abstract method <b>".htmlSpecChars($ShortSignature)."</b> in <b>".htmlSpecChars($ClassName_Full)."</b>.";
+                                $Effect = "Recompilation of a client program may be terminated with the message: a client class C is not abstract and does not override abstract method <b>".htmlSpecChars(get_Signature($Target, 2, "Short"))."</b> in <b>".htmlSpecChars(get_TypeName($MethodInfo{2}{$Target}{"Class"}, 2))."</b>.";
                             }
                         }
                         elsif($Kind eq "Abstract_Class_Added_Abstract_Method")
                         {
-                            my $ShortSignature = get_Signature($Target, 2, "Short");
-                            my $ClassName_Full = get_TypeName($MethodInfo{2}{$Target}{"Class"}, 2);
                             $Change = "Abstract method ".black_Name($Target, 2)." has been added to this $Type_Type.";
-                            if($Level eq "Binary")
-                            {
-                                if($Add_Effect) {
-                                    $Effect = "A client program may be interrupted by <b>AbstractMethodError</b> exception.".$Add_Effect;
-                                }
-                                else {
-                                    $Effect = "No effect.";
-                                }
+                            if($Level eq "Binary") {
+                                $Effect = "No effect.";
                             }
                             else {
-                                $Effect = "Recompilation of a client program may be terminated with the message: a client class C is not abstract and does not override abstract method <b>".htmlSpecChars($ShortSignature)."</b> in <b>".htmlSpecChars($ClassName_Full)."</b>.";
+                                $Effect = "Recompilation of a client program may be terminated with the message: a client class C is not abstract and does not override abstract method <b>".htmlSpecChars(get_Signature($Target, 2, "Short"))."</b> in <b>".htmlSpecChars(get_TypeName($MethodInfo{2}{$Target}{"Class"}, 2))."</b>.";
+                            }
+                        }
+                        elsif($Kind eq "Abstract_Class_Added_Abstract_Method_Invoked_By_Others")
+                        {
+                            $Change = "Abstract method ".black_Name($Target, 2)." has been added to this $Type_Type.";
+                            if($Level eq "Binary") {
+                                $Effect = "A client program may be interrupted by <b>AbstractMethodError</b> exception. Added abstract method is called in 2nd library version by the method ".black_Name($Problems{"InvokedBy"}, 1)." and may not be implemented by old clients.";
+                            }
+                            else {
+                                $Effect = "Recompilation of a client program may be terminated with the message: a client class C is not abstract and does not override abstract method <b>".htmlSpecChars(get_Signature($Target, 2, "Short"))."</b> in <b>".htmlSpecChars(get_TypeName($MethodInfo{2}{$Target}{"Class"}, 2))."</b>.";
                             }
                         }
                         elsif($Kind eq "Class_Removed_Abstract_Method"
                         or $Kind eq "Interface_Removed_Abstract_Method")
                         {
-                            my $ShortSignature = get_Signature($Target, 1, "Short");
-                            my $ClassName_Full = get_TypeName($MethodInfo{1}{$Target}{"Class"}, 1);
                             $Change = "Abstract method ".black_Name($Target, 1)." has been removed from this $Type_Type.";
                             if($Level eq "Binary") {
                                 $Effect = "A client program may be interrupted by <b>NoSuchMethodError</b> exception.";
                             }
                             else {
-                                $Effect = "Recompilation of a client program may be terminated with the message: cannot find method <b>".htmlSpecChars($ShortSignature)."</b> in $Type_Type <b>".htmlSpecChars($ClassName_Full)."</b>.";
+                                $Effect = "Recompilation of a client program may be terminated with the message: cannot find method <b>".htmlSpecChars(get_Signature($Target, 1, "Short"))."</b> in $Type_Type <b>".htmlSpecChars(get_TypeName($MethodInfo{1}{$Target}{"Class"}, 1))."</b>.";
                             }
                         }
                         elsif($Kind eq "Interface_Added_Abstract_Method")
                         {
-                            my $ShortSignature = get_Signature($Target, 2, "Short");
-                            my $ClassName_Full = get_TypeName($MethodInfo{2}{$Target}{"Class"}, 2);
                             $Change = "Abstract method ".black_Name($Target, 2)." has been added to this $Type_Type.";
-                            if($Level eq "Binary")
-                            {
-                                if($Add_Effect) {
-                                    $Effect = "A client program may be interrupted by <b>AbstractMethodError</b> exception.".$Add_Effect;
-                                }
-                                else {
-                                    $Effect = "No effect.";
-                                }
+                            if($Level eq "Binary") {
+                                $Effect = "No effect.";
                             }
                             else {
-                                $Effect = "Recompilation of a client program may be terminated with the message: a client class C is not abstract and does not override abstract method <b>".htmlSpecChars($ShortSignature)."</b> in <b>".htmlSpecChars($ClassName_Full)."</b>.";
+                                $Effect = "Recompilation of a client program may be terminated with the message: a client class C is not abstract and does not override abstract method <b>".htmlSpecChars(get_Signature($Target, 2, "Short"))."</b> in <b>".htmlSpecChars(get_TypeName($MethodInfo{2}{$Target}{"Class"}, 2))."</b>.";
+                            }
+                        }
+                        elsif($Kind eq "Interface_Added_Abstract_Method_Invoked_By_Others")
+                        {
+                            $Change = "Abstract method ".black_Name($Target, 2)." has been added to this $Type_Type.";
+                            if($Level eq "Binary") {
+                                $Effect = "A client program may be interrupted by <b>AbstractMethodError</b> exception. Added abstract method is called in 2nd library version by the method ".black_Name($Problems{"InvokedBy"}, 1)." and may not be implemented by old clients.";
+                            }
+                            else {
+                                $Effect = "Recompilation of a client program may be terminated with the message: a client class C is not abstract and does not override abstract method <b>".htmlSpecChars(get_Signature($Target, 2, "Short"))."</b> in <b>".htmlSpecChars(get_TypeName($MethodInfo{2}{$Target}{"Class"}, 2))."</b>.";
                             }
                         }
                         elsif($Kind eq "Class_Method_Became_Abstract")
                         {
-                            my $ShortSignature = get_Signature($Target, 1, "Short");
-                            my $ClassName_Full = get_TypeName($MethodInfo{1}{$Target}{"Class"}, 1);
                             $Change = "Method ".black_Name($Target, 1)." became <b>abstract</b>.";
                             if($Level eq "Binary") {
                                 $Effect = "A client program may be interrupted by <b>InstantiationError</b> exception.";
                             }
                             else {
-                                $Effect = "Recompilation of a client program may be terminated with the message: a client class C is not abstract and does not override abstract method <b>".htmlSpecChars($ShortSignature)."</b> in <b>".htmlSpecChars($ClassName_Full)."</b>.";
+                                $Effect = "Recompilation of a client program may be terminated with the message: a client class C is not abstract and does not override abstract method <b>".htmlSpecChars(get_Signature($Target, 1, "Short"))."</b> in <b>".htmlSpecChars(get_TypeName($MethodInfo{1}{$Target}{"Class"}, 1))."</b>.";
                             }
                         }
                         elsif($Kind eq "Class_Method_Became_NonAbstract")
                         {
                             $Change = "Abstract method ".black_Name($Target, 1)." became <b>non-abstract</b>.";
-                            $Effect = "Some methods in this class may change behavior.";
+                            if($Level eq "Binary") {
+                                $Effect = "Some methods in this class may change behavior.";
+                            }
+                            else {
+                                $Effect = "No effect.";
+                            }
+                        }
+                        elsif($Kind eq "Interface_Method_Became_NonDefault")
+                        {
+                            $Change = "Method ".black_Name($Target, 1)." became <b>non-default</b>.";
+                            if($Level eq "Binary") {
+                                $Effect = "A client program may be interrupted by <b>AbstractMethodError</b> exception.";
+                            }
+                            else {
+                                $Effect = "Recompilation of a client program may be terminated with the message: a client class C is not abstract and does not override abstract method <b>".htmlSpecChars(get_Signature($Target, 1, "Short"))."</b> in <b>".htmlSpecChars(get_TypeName($MethodInfo{1}{$Target}{"Class"}, 1))."</b>.";
+                            }
+                        }
+                        elsif($Kind eq "Interface_Method_Became_Default")
+                        {
+                            $Change = "Method ".black_Name($Target, 1)." became <b>default</b>.";
+                            if($Level eq "Binary") {
+                                $Effect = "No effect.";
+                            }
+                            else {
+                                $Effect = "No effect.";
+                            }
                         }
                         elsif($Kind eq "Class_Overridden_Method")
                         {
@@ -4411,15 +4468,20 @@ sub get_Report_TypeProblems($$)
                             $Change = "Added super-interface <b>".htmlSpecChars($Target)."</b>.";
                             if($Level eq "Binary")
                             {
-                                if($Add_Effect) {
-                                    $Effect = "If abstract methods from an added super-interface must be implemented by client then it may be interrupted by <b>AbstractMethodError</b> exception.".$Add_Effect;
-                                }
-                                else {
-                                    $Effect = "No effect.";
-                                }
+                                $Effect = "No effect.";
                             }
                             else {
-                                $Effect = "Recompilation of a client program may be terminated with the message: a client class C is not abstract and does not override abstract method in <b>".htmlSpecChars($TypeName)."</b>.";
+                                $Effect = "Recompilation of a client program may be terminated with the message: a client class C is not abstract and does not override abstract method in <b>".htmlSpecChars($Target)."</b>.";
+                            }
+                        }
+                        elsif($Kind eq "Abstract_Class_Added_Super_Interface_Invoked_By_Others")
+                        {
+                            $Change = "Added super-interface <b>".htmlSpecChars($Target)."</b>.";
+                            if($Level eq "Binary") {
+                                $Effect = "If abstract methods from an added super-interface must be implemented by client then it may be interrupted by <b>AbstractMethodError</b> exception.<br/><br/>Abstract method ".black_Name_S(htmlSpecChars($Problems{"Invoked"}))." from the added super-interface is called by the method ".black_Name($Problems{"InvokedBy"}, 2)." in 2nd library version and may not be implemented by old clients.";
+                            }
+                            else {
+                                $Effect = "Recompilation of a client program may be terminated with the message: a client class C is not abstract and does not override abstract method in <b>".htmlSpecChars($Target)."</b>.";
                             }
                         }
                         elsif($Kind eq "Abstract_Class_Added_Super_Interface_With_Implemented_Methods")
@@ -4430,14 +4492,19 @@ sub get_Report_TypeProblems($$)
                         elsif($Kind eq "Interface_Added_Super_Interface")
                         {
                             $Change = "Added super-interface <b>".htmlSpecChars($Target)."</b>.";
+                            if($Level eq "Binary") {
+                                $Effect = "No effect.";
+                            }
+                            else {
+                                $Effect = "Recompilation of a client program may be terminated with the message: a client class C is not abstract and does not override abstract method in <b>".htmlSpecChars($Target)."</b>.";
+                            }
+                        }
+                        elsif($Kind eq "Interface_Added_Super_Interface_Used_By_Others")
+                        {
+                            $Change = "Added super-interface <b>".htmlSpecChars($Target)."</b>.";
                             if($Level eq "Binary")
                             {
-                                if($Add_Effect) {
-                                    $Effect = "If abstract methods from an added super-interface must be implemented by client then it may be interrupted by <b>AbstractMethodError</b> exception.".$Add_Effect;
-                                }
-                                else {
-                                    $Effect = "No effect.";
-                                }
+                                $Effect = "If abstract methods from an added super-interface must be implemented by client then it may be interrupted by <b>AbstractMethodError</b> exception.<br/><br/>Abstract method ".black_Name_S(htmlSpecChars($Problems{"Invoked"}))." from the added super-interface is called by the method ".black_Name($Problems{"InvokedBy"}, 2)." in 2nd library version and may not be implemented by old clients.";
                             }
                             else {
                                 $Effect = "Recompilation of a client program may be terminated with the message: a client class C is not abstract and does not override abstract method in <b>".htmlSpecChars($Target)."</b>.";
@@ -4446,7 +4513,12 @@ sub get_Report_TypeProblems($$)
                         elsif($Kind eq "Interface_Added_Super_Interface_With_Implemented_Methods")
                         {
                             $Change = "Added super-interface <b>".htmlSpecChars($Target)."</b>.";
-                            $Effect = "No effect.";
+                            if($Level eq "Binary") {
+                                $Effect = "No effect.";
+                            }
+                            else {
+                                $Effect = "No effect.";
+                            }
                         }
                         elsif($Kind eq "Interface_Added_Super_Constant_Interface")
                         {
@@ -4492,14 +4564,18 @@ sub get_Report_TypeProblems($$)
                         elsif($Kind eq "Abstract_Class_Added_Super_Abstract_Class")
                         {
                             $Change = "Added abstract super-class <b>".htmlSpecChars($Target)."</b>.";
-                            if($Level eq "Binary")
-                            {
-                                if($Add_Effect) {
-                                    $Effect = "If abstract methods from an added super-class must be implemented by client then it may be interrupted by <b>AbstractMethodError</b> exception.".$Add_Effect;
-                                }
-                                else {
-                                    $Effect = "No effect.";
-                                }
+                            if($Level eq "Binary") {
+                                $Effect = "No effect.";
+                            }
+                            else {
+                                $Effect = "Recompilation of a client program may be terminated with the message: a client class C is not abstract and does not override abstract method in <b>".htmlSpecChars($Target)."</b>.";
+                            }
+                        }
+                        elsif($Kind eq "Abstract_Class_Added_Super_Abstract_Class_Invoked_By_Others")
+                        {
+                            $Change = "Added abstract super-class <b>".htmlSpecChars($Target)."</b>.";
+                            if($Level eq "Binary") {
+                                $Effect = "If abstract methods from an added super-class must be implemented by client then it may be interrupted by <b>AbstractMethodError</b> exception.<br/><br/>Abstract method ".black_Name_S(htmlSpecChars($Problems{"Invoked"}))." from the added abstract super-class is called by the method ".black_Name($Problems{"InvokedBy"}, 2)." in 2nd library version and may not be implemented by old clients.";
                             }
                             else {
                                 $Effect = "Recompilation of a client program may be terminated with the message: a client class C is not abstract and does not override abstract method in <b>".htmlSpecChars($Target)."</b>.";
@@ -4617,6 +4693,11 @@ sub get_Report_TypeProblems($$)
                             }
                         }
                         elsif($Kind eq "Changed_Final_Field_Value")
+                        { # Binary Only
+                            $Change = "Value of final field <b>$Target</b> (<b>$Field_Type</b>) has been changed from <span class='nowrap'><b>".htmlSpecChars($Old_Value)."</b></span> to <span class='nowrap'><b>".htmlSpecChars($New_Value)."</b></span>.";
+                            $Effect = "Old value of the field will be inlined to the client code at compile-time and will be used instead of a new one.";
+                        }
+                        elsif($Kind eq "Changed_Final_Version_Field_Value")
                         { # Binary Only
                             $Change = "Value of final field <b>$Target</b> (<b>$Field_Type</b>) has been changed from <span class='nowrap'><b>".htmlSpecChars($Old_Value)."</b></span> to <span class='nowrap'><b>".htmlSpecChars($New_Value)."</b></span>.";
                             $Effect = "Old value of the field will be inlined to the client code at compile-time and will be used instead of a new one.";
@@ -5199,7 +5280,7 @@ sub getCssStyles()
         font-weight:bold;
         color:#333333;
         font-family:Verdana, Arial;
-        font-size:0.81em;
+        font-size:0.875em;
         border:1px solid Gray;
         text-align:center;
         vertical-align:top;
@@ -6177,6 +6258,45 @@ sub testSystem()
     public interface InterfaceAddedAbstractMethod extends BaseInterface, BaseInterface2 {
         public void someMethod(Integer param);
         public Integer addedMethod(Integer param);
+    }");
+    
+    # Interface_Added_Default_Method
+    writeFile($Path_v1."/InterfaceAddedDefaultMethod.java",
+    "package $PackageName;
+    public interface InterfaceAddedDefaultMethod {
+        public void someMethod(Integer param);
+    }");
+    writeFile($Path_v2."/InterfaceAddedDefaultMethod.java",
+    "package $PackageName;
+    public interface InterfaceAddedDefaultMethod {
+        public void someMethod(Integer param);
+        default Integer addedMethod(Integer param) { return 0; }
+    }");
+    
+    # Method_Became_NonDefault
+    writeFile($Path_v1."/MethodBecameNonDefault.java",
+    "package $PackageName;
+    public interface MethodBecameNonDefault {
+        default Integer someMethod(Integer param) { return 0; }
+    }");
+    writeFile($Path_v2."/MethodBecameNonDefault.java",
+    "package $PackageName;
+    public interface MethodBecameNonDefault {
+        public Integer someMethod(Integer param);
+    }");
+    
+    writeFile($TestsPath."/Test_MethodBecameNonDefault.java",
+    "import $PackageName.*;
+    class Class_MethodBecameNonDefault implements MethodBecameNonDefault {
+    };
+    
+    public class Test_MethodBecameNonDefault
+    {
+        public static void main(String[] args)
+        {
+            Class_MethodBecameNonDefault Obj = new Class_MethodBecameNonDefault();
+            Integer Res = Obj.someMethod(0);
+        }
     }");
     
     # Variable_Arity_To_Array
@@ -8854,6 +8974,15 @@ sub scenario()
     }
     if(not -e $Descriptor{2}{"Path"}) {
         exitStatus("Access_Error", "can't access \'".$Descriptor{2}{"Path"}."\'");
+    }
+    
+    if($Quick)
+    {
+        $TypeProblems_Kind{"Binary"}{"Interface_Added_Super_Interface"} = "Low";
+        $TypeProblems_Kind{"Binary"}{"Abstract_Class_Added_Super_Abstract_Class"} = "Low";
+        $TypeProblems_Kind{"Binary"}{"Abstract_Class_Added_Super_Interface"} = "Low";
+        $TypeProblems_Kind{"Binary"}{"Abstract_Class_Added_Abstract_Method"} = "Low";
+        $TypeProblems_Kind{"Binary"}{"Interface_Added_Abstract_Method"} = "Low";
     }
     
     detect_default_paths();
