@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 ###########################################################################
-# Java API Compliance Checker (JAPICC) 1.7
+# Java API Compliance Checker (JAPICC) 1.8
 # A tool for checking backward compatibility of a Java library API
 #
 # Written by Andrey Ponomarenko
@@ -46,7 +46,7 @@ use Data::Dumper;
 use Digest::MD5 qw(md5_hex);
 use Config;
 
-my $TOOL_VERSION = "1.7";
+my $TOOL_VERSION = "1.8";
 my $API_DUMP_VERSION = "2.0";
 my $API_DUMP_MAJOR = majorVersion($API_DUMP_VERSION);
 
@@ -2367,7 +2367,7 @@ sub skipPackage($$)
     {
         foreach my $SkipPackage (keys(%{$SkipPackages{$LibVersion}}))
         {
-            if($Package=~/(\A|\.)\Q$SkipPackage\E(\.|\Z)/)
+            if($Package=~/\A\Q$SkipPackage\E(\.|\Z)/)
             { # user skipped packages
                 return 1;
             }
@@ -2395,9 +2395,10 @@ sub skipPackage($$)
         my $UserKeeped = 0;
         foreach my $KeepPackage (@Keeped)
         {
-            if($Package=~/(\A|\.)\Q$KeepPackage\E(\.|\Z)/)
+            if($Package=~/\A\Q$KeepPackage\E(\.|\Z)/)
             { # user keeped packages
                 $UserKeeped = 1;
+                last;
             }
         }
         if(not $UserKeeped) {
