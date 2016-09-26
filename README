@@ -5,7 +5,7 @@ NAME:
   
   The Scala language is supported since 1.7 version of the tool.
   
-  The tool is developed by Andrey Ponomarenko: http://abi-laboratory.pro/
+  The tool is developed by Andrey Ponomarenko: https://abi-laboratory.pro/
 
 INSTALL:
   sudo make install prefix=/usr

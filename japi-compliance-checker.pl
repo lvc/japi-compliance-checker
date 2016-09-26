@@ -96,7 +96,7 @@ my %ERROR_CODE = (
 
 my %HomePage = (
     "Dev"=>"https://github.com/lvc/japi-compliance-checker",
-    "Wiki"=>"http://ispras.linuxbase.org/index.php/Java_API_Compliance_Checker"
+    "Wiki"=>"https://lvc.github.io/japi-compliance-checker/"
 );
 
 my $ShortUsage = "Java API Compliance Checker (JAPICC) $TOOL_VERSION
