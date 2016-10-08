@@ -6,6 +6,8 @@ NAME:
   The Scala language is supported since 1.7 version of the tool.
   
   The tool is developed by Andrey Ponomarenko: https://abi-laboratory.pro/
+  
+  The tool is a core of the Java API Tracker project: https://abi-laboratory.pro/java/tracker/
 
 INSTALL:
   sudo make install prefix=/usr
@@ -22,4 +24,12 @@ API DUMPS:
   japi-compliance-checker API-0.dump API-1.dump
 
 ADV. USAGE:
-  For advanced usage, see doc/Readme.html or output of --help option.
+  For advanced usage, see doc/index.html or output of --help option.
+
+TEST SUITE:
+  The tool is tested properly in the Java API Tracker project,
+  by the community and by the internal test suite:
+  
+    japi-compliance-checker -test
+
+  There are about 80 basic tests in the test suite.
