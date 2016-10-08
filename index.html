@@ -62,6 +62,9 @@
       
       <p/>
       The <b>Scala</b> language is supported since <b>1.7</b> version of the tool.
+      
+      <p/>
+      The tool is a core of the <a href='https://abi-laboratory.pro/java/tracker/'>Java API Tracker</a> project.
 
 <table class='summary'><tr><td>
 <div>Table of Contents</div>
@@ -75,6 +78,7 @@
 <li><a href="#Adv_Usage">Adv. Usage (Multiple Archives)</a></li>
 <li><a href="#Examples">Examples</a></li>
 <li><a href="#DetectableProblems">Detectable Compatibility Problems</a></li>
+<li><a href="#TestSuite">Test Suite</a></li>
 <li><a href="#API_Dump">API Dumps</a></li>
 <li><a href="#Report">Report Format</a></li>
 <li><a href="#Verdict">Verdict on Compatibility</a></li>
@@ -285,6 +289,14 @@ The tool searches for the following list of changes in the API that may break bi
 </li>
 </ul>
 <p/>
+
+<a name="TestSuite"></a>
+<h2>Test Suite</h2>
+The tool is tested properly in the <a href='https://abi-laboratory.pro/java/tracker/'>Java API Tracker</a> project, by the community and by the internal test suite:
+<p/>
+<code class='code'>japi-compliance-checker -test</code>
+<p/>
+There are about 80 basic tests in the test suite.
 
 <a name="API_Dump"></a>
 <h2>API Dumps</h2>
