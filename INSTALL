@@ -1,5 +1,4 @@
 
-Copyright (C) 2011 Institute for System Programming, RAS
 Copyright (C) 2011-2016 Andrey Ponomarenko's ABI Laboratory
 
 All rights reserved.
@@ -8,8 +7,8 @@ All rights reserved.
 RELEASE INFORMATION
 
 Project:           Java API Compliance Checker (JAPICC)
-Version:           1.8
-Date:              2016-07-04
+Version:           2.0 Beta
+Date:              2016-12-08
 
 
 This file explains how to install and setup environment

@@ -3,8 +3,7 @@
 # Makefile for Java API Compliance Checker
 # Install/remove the tool for GNU/Linux, FreeBSD and Mac OS X
 #
-# Copyright (C) 2011 Institute for System Programming, RAS
-# Copyright (C) 2011-2015 Andrey Ponomarenko's ABI Laboratory
+# Copyright (C) 2011-2016 Andrey Ponomarenko's ABI Laboratory
 #
 # Written by Andrey Ponomarenko
 #
@@ -21,6 +20,7 @@
 # and the GNU Lesser General Public License along with this program.
 # If not, see <http://www.gnu.org/licenses/>.
 ###########################################################################
+use strict;
 use Getopt::Long;
 Getopt::Long::Configure ("posix_default", "no_ignore_case");
 use File::Path qw(mkpath rmtree);
@@ -30,7 +30,6 @@ use File::Basename qw(dirname);
 use Cwd qw(abs_path);
 use File::Find;
 use Config;
-use strict;
 
 my $TOOL_SNAME = "japi-compliance-checker";
 my $ARCHIVE_DIR = abs_path(dirname($0));
@@ -208,9 +207,9 @@ sub scenario()
         # copy modules
         if(-d $ARCHIVE_DIR."/modules")
         {
-                print "-- Installing $MODULES_PATH\n";
-                mkpath($MODULES_PATH);
-                copyDir($ARCHIVE_DIR."/modules", $MODULES_PATH);
+            print "-- Installing $MODULES_PATH\n";
+            mkpath($MODULES_PATH);
+            copyDir($ARCHIVE_DIR."/modules", $MODULES_PATH);
         }
         
         # check PATH
@@ -267,18 +266,19 @@ sub copyDir($$)
 sub readFile($)
 {
     my $Path = $_[0];
-    return "" if(not $Path or not -f $Path);
+    
     open(FILE, $Path) || die ("can't open file \'$Path\': $!\n");
     local $/ = undef;
     my $Content = <FILE>;
     close(FILE);
+    
     return $Content;
 }
 
 sub writeFile($$)
 {
     my ($Path, $Content) = @_;
-    return if(not $Path);
+    
     open(FILE, ">".$Path) || die ("can't open file \'$Path\': $!\n");
     print FILE $Content;
     close(FILE);
