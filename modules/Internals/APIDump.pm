@@ -183,6 +183,116 @@ sub readArchive($$)
     rmtree($ExtractPath);
 }
 
+sub sepParams($$$)
+{
+    my ($Params, $Comma, $Sp) = @_;
+    my @Parts = ();
+    my %B = ( "("=>0, "<"=>0, ")"=>0, ">"=>0 );
+    my $Part = 0;
+    foreach my $Pos (0 .. length($Params) - 1)
+    {
+        my $S = substr($Params, $Pos, 1);
+        if(defined $B{$S}) {
+            $B{$S} += 1;
+        }
+        if($S eq "," and
+        $B{"("}==$B{")"} and $B{"<"}==$B{">"})
+        {
+            if($Comma)
+            { # include comma
+                $Parts[$Part] .= $S;
+            }
+            $Part += 1;
+        }
+        else {
+            $Parts[$Part] .= $S;
+        }
+    }
+    if(not $Sp)
+    { # remove spaces
+        foreach (@Parts)
+        {
+            s/\A //g;
+            s/ \Z//g;
+        }
+    }
+    return @Parts;
+}
+
+sub simpleDecl($)
+{
+    my $Line = $_[0];
+    
+    my %B = ( "<"=>0, ">"=>0 );
+    my @Chars = split("", $Line);
+    
+    my $Extends = undef;
+    my ($Pre, $Post) = ("", "");
+    my @Replace = ();
+    
+    foreach my $Pos (0 .. $#Chars)
+    {
+        my $S = $Chars[$Pos];
+        if(defined $B{$S}) {
+            $B{$S} += 1;
+        }
+        
+        if($B{"<"}!=0)
+        {
+            if(defined $Extends)
+            {
+                my $E = 0;
+                
+                if($S eq ",")
+                {
+                    if($B{"<"}-$B{">"}==$Extends) {
+                        $E = 1;
+                    }
+                }
+                elsif($S eq ">")
+                {
+                    if($B{"<"}==$B{">"} or $B{"<"}-$B{">"}+1==$Extends) {
+                        $E = 1;
+                    }
+                }
+                
+                if($E)
+                {
+                    if($Post) {
+                        push(@Replace, $Post);
+                    }
+                    
+                    $Extends = undef;
+                    ($Pre, $Post) = ("", "");
+                }
+            }
+            elsif($B{"<"}!=$B{">"})
+            {
+                if(substr($Pre, -9) eq " extends ")
+                {
+                    $Extends = $B{"<"}-$B{">"};
+                }
+            }
+        }
+        
+        $Pre .= $S;
+        if(defined $Extends) {
+            $Post .= $S;
+        }
+    }
+    
+    my %Tmpl = ();
+    
+    foreach my $R (@Replace)
+    {
+        if($Line=~s/([A-Z\d\?]+) extends \Q$R\E/$1/) {
+            $Tmpl{$1} = $R;
+        }
+    }
+    
+    return ($Line, \%Tmpl);
+}
+
 sub readClasses($$$)
 {
     my ($Paths, $LVer, $ArchiveName) = @_;
@@ -303,24 +413,14 @@ sub readClasses($$$)
             next;
         }
         
+        my $TmplP = undef;
+        
         # Java 7: templates
         if(index($LINE, "<")!=-1)
         { # <T extends java.lang.Object>
           # <KEYIN extends java.lang.Object ...
-            if($LINE=~/<[A-Z\d\?]+ /i)
-            {
-                while($LINE=~/<([A-Z\d\?]+ .*?)>( |\Z)/i)
-                {
-                    my $Str = $1;
-                    my @Prms = ();
-                    foreach my $P (sepParams($Str, 0, 0))
-                    {
-                        $P=~s/\A([A-Z\d\?]+) .*\Z/$1/ig;
-                        push(@Prms, $P);
-                    }
-                    my $Str_N = join(", ", @Prms);
-                    $LINE=~s/\Q$Str\E/$Str_N/g;
-                }
+            if($LINE=~/<[A-Z\d\?]+ /i) {
+                ($LINE, $TmplP) = simpleDecl($LINE);
             }
         }
         

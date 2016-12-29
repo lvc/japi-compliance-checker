@@ -234,42 +234,6 @@ sub parseTag($$)
     return "";
 }
 
-sub sepParams($$$)
-{
-    my ($Params, $Comma, $Sp) = @_;
-    my @Parts = ();
-    my %B = ( "("=>0, "<"=>0, ")"=>0, ">"=>0 );
-    my $Part = 0;
-    foreach my $Pos (0 .. length($Params) - 1)
-    {
-        my $S = substr($Params, $Pos, 1);
-        if(defined $B{$S}) {
-            $B{$S} += 1;
-        }
-        if($S eq "," and
-        $B{"("}==$B{")"} and $B{"<"}==$B{">"})
-        {
-            if($Comma)
-            { # include comma
-                $Parts[$Part] .= $S;
-            }
-            $Part += 1;
-        }
-        else {
-            $Parts[$Part] .= $S;
-        }
-    }
-    if(not $Sp)
-    { # remove spaces
-        foreach (@Parts)
-        {
-            s/\A //g;
-            s/ \Z//g;
-        }
-    }
-    return @Parts;
-}
-
 sub isDump($)
 {
     if($_[0]=~/\A(.+)\.(api|dump|apidump)(\Q.tar.gz\E|\Q.zip\E|)\Z/) {

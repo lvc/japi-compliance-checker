@@ -3406,7 +3406,7 @@ sub getAffectDesc($$$$)
         if($Location=~/retval/)
         { # return value
             if($Location=~/\./) {
-                push(@Sentence_Parts, "Field \'".specChars($Location)."\' in return value");
+                push(@Sentence_Parts, "Field \'".specChars($Location)."\' in the return value");
             }
             else {
                 push(@Sentence_Parts, "Return value");

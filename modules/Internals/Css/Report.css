@@ -31,15 +31,14 @@ span.section {
     cursor:pointer;
     color:#003E69;
     white-space:nowrap;
-    margin-left:5px;
+    margin-left:0.3125em;
 }
 span:hover.section {
     color:#336699;
 }
 span.sect_aff {
     cursor:pointer;
-    margin-left:7px;
-    padding-left:1em;
+    padding-left:1.55em;
     font-size:0.875em;
     color:#cc3300;
 }
@@ -101,7 +100,7 @@ div.affect {
     padding-bottom:10px;
     font-size:0.87em;
     font-style:italic;
-    line-height:0.75em;
+    line-height:0.9em;
 }
 div.affected {
     padding-left:2em;
@@ -110,18 +109,19 @@ div.affected {
 table.ptable {
     border-collapse:collapse;
     border:1px outset black;
-    line-height:1em;
-    margin-left:15px;
+    margin-left:0.95em;
     margin-top:3px;
     margin-bottom:3px;
-    width:900px;
+    width:56.25em;
 }
 table.ptable td {
     border:1px solid Gray;
-    padding: 3px;
+    padding:3px;
     font-size:0.875em;
     text-align:left;
     vertical-align:top;
+    max-width:28em;
+    word-wrap:break-word;
 }
 table.ptable th {
     background-color:#eeeeee;
@@ -133,7 +133,7 @@ table.ptable th {
     text-align:center;
     vertical-align:top;
     white-space:nowrap;
-    padding: 3px;
+    padding:3px;
 }
 table.summary {
     border-collapse:collapse;
@@ -146,13 +146,13 @@ table.summary th {
     font-size:0.94em;
     white-space:nowrap;
     border:1px inset Gray;
-    padding: 3px;
+    padding:3px;
 }
 table.summary td {
     text-align:right;
     white-space:nowrap;
     border:1px inset Gray;
-    padding: 3px 5px 3px 10px;
+    padding:3px 5px 3px 10px;
 }
 span.mngl {
     padding-left:1em;
