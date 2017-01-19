@@ -5,7 +5,7 @@
 #
 # Written by Andrey Ponomarenko
 #
-# Copyright (C) 2011-2016 Andrey Ponomarenko's ABI Laboratory
+# Copyright (C) 2011-2017 Andrey Ponomarenko's ABI Laboratory
 #
 # PLATFORMS
 # =========
@@ -54,8 +54,9 @@ push(@INC, dirname($MODULES_DIR));
 my %LoadedModules = ();
 loadModule("Basic");
 loadModule("Input");
-loadModule("Utils");
+loadModule("Path");
 loadModule("Logging");
+loadModule("Utils");
 loadModule("TypeAttr");
 loadModule("Filter");
 loadModule("SysFiles");
@@ -76,7 +77,7 @@ my %HomePage = (
 
 my $ShortUsage = "Java API Compliance Checker (JAPICC) $TOOL_VERSION
 A tool for checking backward compatibility of a Java library API
-Copyright (C) 2016 Andrey Ponomarenko's ABI Laboratory
+Copyright (C) 2017 Andrey Ponomarenko's ABI Laboratory
 License: GNU LGPL or GNU GPL
 
 Usage: $CmdName [options]
@@ -564,7 +565,7 @@ sub getModules()
     if(not $TOOL_DIR)
     { # patch for MS Windows
         $TOOL_DIR = ".";
-    }   
+    }
     my @SEARCH_DIRS = (
         # tool's directory
         abs_path($TOOL_DIR),
@@ -578,12 +579,14 @@ sub getModules()
         if($DIR!~/\A(\/|\w+:[\/\\])/)
         { # relative path
             $DIR = abs_path($TOOL_DIR)."/".$DIR;
-        }   
+        }
         if(-d $DIR."/modules") {
             return $DIR."/modules";
-        }   
-    }   
-    exitStatus("Module_Error", "can't find modules");
+        }
+    }
+    
+    print STDERR "ERROR: can't find modules (Did you installed the tool by 'make install' command?)\n";
+    exit(9); # Module_Error
 }
 
 sub loadModule($)
@@ -4192,6 +4195,96 @@ sub getReportPath($)
     }
 }
 
+sub unpackDump($)
+{
+    my $Path = $_[0];
+    
+    if(isDump_U($Path)) {
+        return $Path;
+    }
+    
+    my $TmpDir = $In::Opt{"Tmp"};
+    
+    $Path = getAbsPath($Path);
+    $Path = pathFmt($Path);
+    
+    my ($Dir, $FileName) = sepPath($Path);
+    my $UnpackDir = $TmpDir."/unpack";
+    if(-d $UnpackDir) {
+        rmtree($UnpackDir);
+    }
+    mkpath($UnpackDir);
+    
+    if($FileName=~s/\Q.zip\E\Z//g)
+    { # *.zip
+        my $UnzipCmd = getCmdPath("unzip");
+        if(not $UnzipCmd) {
+            exitStatus("Not_Found", "can't find \"unzip\" command");
+        }
+        chdir($UnpackDir);
+        system("$UnzipCmd \"$Path\" >contents.txt");
+        if($?) {
+            exitStatus("Error", "can't extract \'$Path\'");
+        }
+        chdir($In::Opt{"OrigDir"});
+        my @Contents = ();
+        foreach (split("\n", readFile("$UnpackDir/contents.txt")))
+        {
+            if(/inflating:\s*([^\s]+)/) {
+                push(@Contents, $1);
+            }
+        }
+        if(not @Contents) {
+            exitStatus("Error", "can't extract \'$Path\'");
+        }
+        return join_P($UnpackDir, $Contents[0]);
+    }
+    elsif($FileName=~s/\Q.tar.gz\E\Z//g)
+    { # *.tar.gz
+        if($In::Opt{"OS"} eq "windows")
+        { # -xvzf option is not implemented in tar.exe (2003)
+          # use "gzip.exe -k -d -f" + "tar.exe -xvf" instead
+            my $TarCmd = getCmdPath("tar");
+            if(not $TarCmd) {
+                exitStatus("Not_Found", "can't find \"tar\" command");
+            }
+            my $GzipCmd = getCmdPath("gzip");
+            if(not $GzipCmd) {
+                exitStatus("Not_Found", "can't find \"gzip\" command");
+            }
+            chdir($UnpackDir);
+            qx/$GzipCmd -k -d -f "$Path"/; # keep input files (-k)
+            if($?) {
+                exitStatus("Error", "can't extract \'$Path\'");
+            }
+            my @Contents = qx/$TarCmd -xvf "$Dir\\$FileName.tar"/;
+            if($? or not @Contents) {
+                exitStatus("Error", "can't extract \'$Path\'");
+            }
+            chdir($In::Opt{"OrigDir"});
+            unlink($Dir."/".$FileName.".tar");
+            chomp $Contents[0];
+            return join_P($UnpackDir, $Contents[0]);
+        }
+        else
+        { # Linux, Unix, OS X
+            my $TarCmd = getCmdPath("tar");
+            if(not $TarCmd) {
+                exitStatus("Not_Found", "can't find \"tar\" command");
+            }
+            chdir($UnpackDir);
+            my @Contents = qx/$TarCmd -xvzf "$Path" 2>&1/;
+            if($? or not @Contents) {
+                exitStatus("Error", "can't extract \'$Path\'");
+            }
+            chdir($In::Opt{"OrigDir"});
+            $Contents[0]=~s/^x //; # OS X
+            chomp $Contents[0];
+            return join_P($UnpackDir, $Contents[0]);
+        }
+    }
+}
+
 sub createArchive($$)
 {
     my ($Path, $To) = @_;
@@ -4530,7 +4623,7 @@ sub scenario()
     }
     if(defined $In::Opt{"ShowVersion"})
     {
-        printMsg("INFO", "Java API Compliance Checker (JAPICC) $TOOL_VERSION\nCopyright (C) 2016 Andrey Ponomarenko's ABI Laboratory\nLicense: LGPL or GPL <http://www.gnu.org/licenses/>\nThis program is free software: you can redistribute it and/or modify it.\n\nWritten by Andrey Ponomarenko.");
+        printMsg("INFO", "Java API Compliance Checker (JAPICC) $TOOL_VERSION\nCopyright (C) 2017 Andrey Ponomarenko's ABI Laboratory\nLicense: LGPL or GPL <http://www.gnu.org/licenses/>\nThis program is free software: you can redistribute it and/or modify it.\n\nWritten by Andrey Ponomarenko.");
         exit(0);
     }
     if(defined $In::Opt{"DumpVersion"})

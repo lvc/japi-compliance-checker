@@ -1,7 +1,7 @@
 ###########################################################################
 # A module with basic functions
 #
-# Copyright (C) 2016 Andrey Ponomarenko's ABI Laboratory
+# Copyright (C) 2017 Andrey Ponomarenko's ABI Laboratory
 #
 # Written by Andrey Ponomarenko
 #
@@ -19,7 +19,6 @@
 # If not, see <http://www.gnu.org/licenses/>.
 ###########################################################################
 use strict;
-use Cwd qw(realpath);
 
 my $ARG_MAX = getArgMax();
 
@@ -47,15 +46,6 @@ sub setTarget($)
     }
     
     $In::Opt{"Target"} = $Target;
-}
-
-sub join_P($$)
-{
-    my $S = "/";
-    if($In::Opt{"OS"} eq "windows") {
-        $S = "\\";
-    }
-    return join($S, @_);
 }
 
 sub getArgMax()
@@ -183,135 +173,6 @@ sub cmdFind($$$$)
             }
         }
         return split(/\n/, `$Cmd 2>\"$TmpDir/null\"`);
-    }
-}
-
-sub getAbsPath($)
-{ # abs_path() should NOT be called for absolute inputs
-  # because it can change them
-    my $Path = $_[0];
-    if(not isAbs($Path)) {
-        $Path = abs_path($Path);
-    }
-    return pathFmt($Path, $In::Opt{"OS"});
-}
-
-sub pathFmt(@)
-{
-    my $Path = shift(@_);
-    my $Fmt = $In::Opt{"OS"};
-    if(@_) {
-        $Fmt = shift(@_);
-    }
-    
-    $Path=~s/[\/\\]+\.?\Z//g;
-    if($Fmt eq "windows")
-    {
-        $Path=~s/\//\\/g;
-        $Path = lc($Path);
-    }
-    else {
-        $Path=~s/\\/\//g;
-    }
-    
-    $Path=~s/[\/\\]+\Z//g;
-    
-    return $Path;
-}
-
-sub realpath_F($)
-{
-    my $Path = $_[0];
-    return pathFmt(realpath($Path));
-}
-
-sub unpackDump($)
-{
-    my $Path = $_[0];
-    
-    if(isDump_U($Path)) {
-        return $Path;
-    }
-    
-    my $TmpDir = $In::Opt{"Tmp"};
-    
-    $Path = getAbsPath($Path);
-    $Path = pathFmt($Path);
-    
-    my ($Dir, $FileName) = sepPath($Path);
-    my $UnpackDir = $TmpDir."/unpack";
-    if(-d $UnpackDir) {
-        rmtree($UnpackDir);
-    }
-    mkpath($UnpackDir);
-    
-    if($FileName=~s/\Q.zip\E\Z//g)
-    { # *.zip
-        my $UnzipCmd = getCmdPath("unzip");
-        if(not $UnzipCmd) {
-            exitStatus("Not_Found", "can't find \"unzip\" command");
-        }
-        chdir($UnpackDir);
-        system("$UnzipCmd \"$Path\" >contents.txt");
-        if($?) {
-            exitStatus("Error", "can't extract \'$Path\'");
-        }
-        chdir($In::Opt{"OrigDir"});
-        my @Contents = ();
-        foreach (split("\n", readFile("$UnpackDir/contents.txt")))
-        {
-            if(/inflating:\s*([^\s]+)/) {
-                push(@Contents, $1);
-            }
-        }
-        if(not @Contents) {
-            exitStatus("Error", "can't extract \'$Path\'");
-        }
-        return join_P($UnpackDir, $Contents[0]);
-    }
-    elsif($FileName=~s/\Q.tar.gz\E\Z//g)
-    { # *.tar.gz
-        if($In::Opt{"OS"} eq "windows")
-        { # -xvzf option is not implemented in tar.exe (2003)
-          # use "gzip.exe -k -d -f" + "tar.exe -xvf" instead
-            my $TarCmd = getCmdPath("tar");
-            if(not $TarCmd) {
-                exitStatus("Not_Found", "can't find \"tar\" command");
-            }
-            my $GzipCmd = getCmdPath("gzip");
-            if(not $GzipCmd) {
-                exitStatus("Not_Found", "can't find \"gzip\" command");
-            }
-            chdir($UnpackDir);
-            qx/$GzipCmd -k -d -f "$Path"/; # keep input files (-k)
-            if($?) {
-                exitStatus("Error", "can't extract \'$Path\'");
-            }
-            my @Contents = qx/$TarCmd -xvf "$Dir\\$FileName.tar"/;
-            if($? or not @Contents) {
-                exitStatus("Error", "can't extract \'$Path\'");
-            }
-            chdir($In::Opt{"OrigDir"});
-            unlink($Dir."/".$FileName.".tar");
-            chomp $Contents[0];
-            return join_P($UnpackDir, $Contents[0]);
-        }
-        else
-        { # Linux, Unix, OS X
-            my $TarCmd = getCmdPath("tar");
-            if(not $TarCmd) {
-                exitStatus("Not_Found", "can't find \"tar\" command");
-            }
-            chdir($UnpackDir);
-            my @Contents = qx/$TarCmd -xvzf "$Path" 2>&1/;
-            if($? or not @Contents) {
-                exitStatus("Error", "can't extract \'$Path\'");
-            }
-            chdir($In::Opt{"OrigDir"});
-            $Contents[0]=~s/^x //; # OS X
-            chomp $Contents[0];
-            return join_P($UnpackDir, $Contents[0]);
-        }
     }
 }
 
