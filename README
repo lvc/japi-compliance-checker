@@ -1,5 +1,5 @@
-JAPICC 2.0 Beta
-===============
+JAPICC 2.0
+==========
 
 NAME:
   Java API Compliance Checker (JAPICC) - a tool for checking backward binary and source-level compatibility of a Java library API.
