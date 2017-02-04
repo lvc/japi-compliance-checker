@@ -1,7 +1,7 @@
 ###########################################################################
 # A module for logging
 #
-# Copyright (C) 2016 Andrey Ponomarenko's ABI Laboratory
+# Copyright (C) 2016-2017 Andrey Ponomarenko's ABI Laboratory
 #
 # Written by Andrey Ponomarenko
 #
@@ -75,7 +75,7 @@ sub initLogging($)
     my $LVer = $_[0];
     if($In::Opt{"Debug"})
     { # debug directory
-        $DEBUG_DIR{$LVer} = "debug/".$In::Opt{"TargetLibraryName"}."/".$In::Desc{$LVer}{"Version"};
+        $DEBUG_DIR{$LVer} = "debug/".$In::Opt{"TargetLib"}."/".$In::Desc{$LVer}{"Version"};
         
         if(-d $DEBUG_DIR{$LVer}) {
             rmtree($DEBUG_DIR{$LVer});

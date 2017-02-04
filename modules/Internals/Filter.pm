@@ -1,7 +1,7 @@
 ###########################################################################
 # A module to filter API symbols
 #
-# Copyright (C) 2016 Andrey Ponomarenko's ABI Laboratory
+# Copyright (C) 2016-2017 Andrey Ponomarenko's ABI Laboratory
 #
 # Written by Andrey Ponomarenko
 #
@@ -258,7 +258,7 @@ sub skipPackage($$)
             if(not $SkippedPackage{$LVer}{$P})
             {
                 $SkippedPackage{$LVer}{$P} = 1;
-                printMsg("WARNING", "skip \"$P\" packages");
+                printMsg("WARNING", "skipping \"$P\" packages");
                 
                 if($Note) {
                     printMsg("NOTE", "use --keep-internal option to check them");

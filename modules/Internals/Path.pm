@@ -48,7 +48,7 @@ sub getAbsPath($)
 { # abs_path() should NOT be called for absolute inputs
   # because it can change them
     my $Path = $_[0];
-    if(not isAbs($Path)) {
+    if(not isAbsPath($Path)) {
         $Path = abs_path($Path);
     }
     return pathFmt($Path, $In::Opt{"OS"});
@@ -65,6 +65,15 @@ sub join_P($$)
     my $S = "/";
     if($In::Opt{"OS"} eq "windows") {
         $S = "\\";
+    }
+    return join($S, @_);
+}
+
+sub join_A($$)
+{
+    my $S = ":";
+    if($In::Opt{"OS"} eq "windows") {
+        $S = ";";
     }
     return join($S, @_);
 }

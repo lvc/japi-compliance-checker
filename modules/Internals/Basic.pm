@@ -1,7 +1,7 @@
 ###########################################################################
 # A module with simple functions
 #
-# Copyright (C) 2016 Andrey Ponomarenko's ABI Laboratory
+# Copyright (C) 2016-2017 Andrey Ponomarenko's ABI Laboratory
 #
 # Written by Andrey Ponomarenko
 #
@@ -183,7 +183,7 @@ sub checkCmd($)
     return 0;
 }
 
-sub isAbs($) {
+sub isAbsPath($) {
     return ($_[0]=~/\A(\/|\w+:[\/\\])/);
 }
 

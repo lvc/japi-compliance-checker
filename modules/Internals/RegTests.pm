@@ -1,7 +1,7 @@
 ###########################################################################
 # A module with regression test suite
 #
-# Copyright (C) 2016 Andrey Ponomarenko's ABI Laboratory
+# Copyright (C) 2016-2017 Andrey Ponomarenko's ABI Laboratory
 #
 # Written by Andrey Ponomarenko
 #
@@ -1361,7 +1361,7 @@ sub testTool()
     my $BuildRoot2 = getDirname($Path_v2);
     if(compileJavaLib($LibName, $BuildRoot1, $BuildRoot2))
     {
-        runTests($TestsPath, $PackageName, $BuildRoot1, $BuildRoot2);
+        runTests($TestsPath, $PackageName, getAbsPath($BuildRoot1), getAbsPath($BuildRoot2));
         runChecker($LibName, $BuildRoot1, $BuildRoot2);
     }
 }
@@ -1407,40 +1407,32 @@ sub runTests($$$$)
     if(not $JavacCmd) {
         exitStatus("Not_Found", "can't find \"javac\" compiler");
     }
+    
     my $JavaCmd = getCmdPath("java");
     if(not $JavaCmd) {
         exitStatus("Not_Found", "can't find \"java\" command");
     }
-    mkpath($TestsPath."/$PackageName/");
-    foreach my $ClassPath (cmdFind($Path_v1,"","*\.class",""))
-    { # create a compile-time package copy
-        copy($ClassPath, $TestsPath."/$PackageName/");
-    }
+    
     chdir($TestsPath);
-    system($JavacCmd." -g *.java");
+    system($JavacCmd." -classpath \"".$Path_v1."\" -g *.java");
     chdir($In::Opt{"OrigDir"});
-    foreach my $TestSrc (cmdFind($TestsPath,"","*\.java",""))
+    
+    foreach my $TestSrc (cmdFind($TestsPath, "", "*\\.java"))
     { # remove test source
         unlink($TestSrc);
     }
     
-    my $PkgPath = $TestsPath."/".$PackageName;
-    if(-d $PkgPath) {
-        rmtree($PkgPath);
-    }
-    mkpath($PkgPath);
-    foreach my $ClassPath (cmdFind($Path_v2,"","*\.class",""))
-    { # create a run-time package copy
-        copy($ClassPath, $PkgPath."/");
-    }
     my $TEST_REPORT = "";
-    foreach my $TestPath (cmdFind($TestsPath,"","*\.class",1))
+    
+    foreach my $TestPath (cmdFind($TestsPath, "", "*\\.class", 1))
     { # run tests
         my $Name = getFilename($TestPath);
         $Name=~s/\.class\Z//g;
+        
         chdir($TestsPath);
-        system($JavaCmd." $Name >result.txt 2>&1");
+        system($JavaCmd." -classpath \"".join_A($Path_v2, ".")."\" $Name >result.txt 2>&1");
         chdir($In::Opt{"OrigDir"});
+        
         my $Result = readFile($TestsPath."/result.txt");
         unlink($TestsPath."/result.txt");
         $TEST_REPORT .= "TEST CASE: $Name\n";
@@ -1453,33 +1445,35 @@ sub runTests($$$$)
         }
         $TEST_REPORT .= "\n";
     }
-    writeFile("$TestsPath/Journal.txt", $TEST_REPORT);
     
-    if(-d $PkgPath) {
-        rmtree($PkgPath);
-    }
+    writeFile("$TestsPath/Journal.txt", $TEST_REPORT);
 }
 
 sub compileJavaLib($$$)
 {
     my ($LibName, $BuildRoot1, $BuildRoot2) = @_;
+    
     my $JavacCmd = getCmdPath("javac");
     if(not $JavacCmd) {
         exitStatus("Not_Found", "can't find \"javac\" compiler");
     }
+    
     checkJavaCompiler($JavacCmd);
+    
     my $JarCmd = getCmdPath("jar");
     if(not $JarCmd) {
         exitStatus("Not_Found", "can't find \"jar\" command");
     }
-    writeFile("$BuildRoot1/MANIFEST.MF", "Implementation-Version: 1.0\n");
+    
     # space before value, new line
+    writeFile("$BuildRoot1/MANIFEST.MF", "Implementation-Version: 1.0\n");
     writeFile("$BuildRoot2/MANIFEST.MF", "Implementation-Version: 2.0\n");
+    
     my (%SrcDir1, %SrcDir2) = ();
-    foreach my $Path (cmdFind($BuildRoot1,"f","*.java","")) {
+    foreach my $Path (cmdFind($BuildRoot1, "f", "*\\.java")) {
         $SrcDir1{getDirname($Path)} = 1;
     }
-    foreach my $Path (cmdFind($BuildRoot2,"f","*.java","")) {
+    foreach my $Path (cmdFind($BuildRoot2, "f", "*\\.java")) {
         $SrcDir2{getDirname($Path)} = 1;
     }
     # build classes v.1
@@ -1512,10 +1506,10 @@ sub compileJavaLib($$$)
     system("$JarCmd -cmf MANIFEST.MF $LibName.jar TestPackage");
     chdir($In::Opt{"OrigDir"});
     
-    foreach my $SrcPath (cmdFind($BuildRoot1,"","*\.java","")) {
+    foreach my $SrcPath (cmdFind($BuildRoot1, "", "*\\.java")) {
         unlink($SrcPath);
     }
-    foreach my $SrcPath (cmdFind($BuildRoot2,"","*\.java","")) {
+    foreach my $SrcPath (cmdFind($BuildRoot2, "", "*\\.java")) {
         unlink($SrcPath);
     }
     return 1;

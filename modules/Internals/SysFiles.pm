@@ -1,7 +1,7 @@
 ###########################################################################
 # A module to find system files
 #
-# Copyright (C) 2016 Andrey Ponomarenko's ABI Laboratory
+# Copyright (C) 2016-2017 Andrey Ponomarenko's ABI Laboratory
 #
 # Written by Andrey Ponomarenko
 #
@@ -167,11 +167,12 @@ sub detectDefaultPaths($$)
         {
             foreach my $Type ("include", "lib", "bin")
             { # autodetecting system "devel" directories
-                foreach my $Path (cmdFind("/","d","*$Type*",1)) {
+                foreach my $Path (cmdFind("/", "d", "*$Type*", 1)) {
                     $In::Opt{"SysPaths"}{$Type}{$Path} = 1;
                 }
-                if(-d "/usr") {
-                    foreach my $Path (cmdFind("/usr","d","*$Type*",1)) {
+                if(-d "/usr")
+                {
+                    foreach my $Path (cmdFind("/usr", "d", "*$Type*", 1)) {
                         $In::Opt{"SysPaths"}{$Type}{$Path} = 1;
                     }
                 }

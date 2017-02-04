@@ -1,7 +1,7 @@
 ###########################################################################
 # A module to create API dump from disassembled code
 #
-# Copyright (C) 2016 Andrey Ponomarenko's ABI Laboratory
+# Copyright (C) 2016-2017 Andrey Ponomarenko's ABI Laboratory
 #
 # Written by Andrey Ponomarenko
 #
@@ -19,6 +19,7 @@
 # If not, see <http://www.gnu.org/licenses/>.
 ###########################################################################
 use strict;
+use IPC::Open3;
 
 my $ExtractCounter = 0;
 
@@ -126,7 +127,7 @@ sub readArchive($$)
     }
     chdir($In::Opt{"OrigDir"});
     my @Classes = ();
-    foreach my $ClassPath (cmdFind($ExtractPath,"","*\.class",""))
+    foreach my $ClassPath (cmdFind($ExtractPath, "", "*\\.class"))
     {
         if($In::Opt{"OS"} ne "windows") {
             $ClassPath=~s/\.class\Z//g;
@@ -153,7 +154,6 @@ sub readArchive($$)
             }
         }
         
-        $ClassName=~s/\$/./g; # real name for GlyphView$GlyphPainter is GlyphView.GlyphPainter
         push(@Classes, $ClassPath);
     }
     
@@ -170,11 +170,11 @@ sub readArchive($$)
         }
     }
     
-    $ExtractCounter+=1;
+    $ExtractCounter += 1;
     
     if($LVer)
     {
-        foreach my $SubArchive (cmdFind($ExtractPath,"","*\.jar",""))
+        foreach my $SubArchive (cmdFind($ExtractPath, "", "*\\.jar"))
         { # recursive step
             readArchive($LVer, $SubArchive);
         }
@@ -285,7 +285,7 @@ sub simpleDecl($)
     
     foreach my $R (@Replace)
     {
-        if($Line=~s/([A-Z\d\?]+) extends \Q$R\E/$1/) {
+        if($Line=~s/([A-Za-z\d\?]+) extends \Q$R\E/$1/) {
             $Tmpl{$1} = $R;
         }
     }
@@ -302,42 +302,22 @@ sub readClasses($$$)
         exitStatus("Not_Found", "can't find \"javap\" command");
     }
     
-    my $Input = join(" ", @{$Paths});
-    if($In::Opt{"OS"} ne "windows")
-    { # on unix ensure that the system does not try and interpret the $, by escaping it
-        $Input=~s/\$/\\\$/g;
-    }
-    
     my $TmpDir = $In::Opt{"Tmp"};
     
-    my $Output = $TmpDir."/class-dump.txt";
-    if(-e $Output) {
-        unlink($Output);
+    # ! private info should be processed
+    my @Cmd = ($JavapCmd, "-s", "-private");
+    if(not $In::Opt{"Quick"}) {
+        @Cmd = (@Cmd, "-c", "-verbose");
     }
     
-    my $Cmd = "$JavapCmd -s -private";
-    if(not $In::Opt{"Quick"}) {
-        $Cmd .= " -c -verbose";
-    }
+    @Cmd = (@Cmd, @{$Paths});
     
     chdir($TmpDir."/".$ExtractCounter);
-    system($Cmd." ".$Input." >\"$Output\" 2>\"$TmpDir/warn\"");
-    chdir($In::Opt{"OrigDir"});
-    
-    if(not -e $Output) {
-        exitStatus("Error", "internal error in parser, try to reduce ARG_MAX");
-    }
-    if($In::Opt{"Debug"}) {
-        appendFile(getDebugDir($LVer)."/class-dump.txt", readFile($Output));
-    }
-    
-    # ! private info should be processed
-    open(CONTENT, "$TmpDir/class-dump.txt");
-    my @Content = <CONTENT>;
-    close(CONTENT);
+    my $Pid = open3(*IN, *OUT, *ERR, @Cmd);
+    close(IN);
     
     my (%TypeAttr, $CurrentMethod, $CurrentPackage, $CurrentClass) = ();
-    my ($InParamTable, $InExceptionTable, $InCode) = (0, 0, 0);
+    my ($InParamTable, $InVarTypeTable, $InExceptionTable, $InCode) = (0, 0, 0, 0);
     
     my $InAnnotations = undef;
     my $InAnnotations_Class = undef;
@@ -345,72 +325,159 @@ sub readClasses($$$)
     my %AnnotationName = ();
     my %AnnotationNum = (); # support for Java 7
     
-    my ($ParamPos, $FieldPos, $LineNum) = (0, 0, 0);
-    while($LineNum<=$#Content)
+    my ($ParamPos, $FieldPos) = (0, 0);
+    my ($LINE, $Stay, $Run, $NonEmpty) = (undef, 0, 1, undef);
+    
+    my $DContent = "";
+    my $Debug = (defined $In::Opt{"Debug"});
+    
+    while($Run)
     {
-        my $LINE = $Content[$LineNum++];
-        my $LINE_N = $Content[$LineNum];
-        
-        if($LINE=~/\A\s*(?:const|AnnotationDefault|Compiled|Source|Constant)/) {
-            next;
-        }
-        
-        if($LINE=~/\sof\s|\sline \d+:|\[\s*class|= \[|\$[\d\$\(:\.;]| class\$|[\.\/]\$|\._\d|\$eq/)
-        { # artificial methods and code
-            next;
-        }
-        
-        if($LINE=~/ (\w+\$|)\w+\$\w+[\(:]/) {
-            next;
-        }
-        
-        # $LINE=~s/ \$(\w)/ $1/g;
-        # $LINE_N=~s/ \$(\w)/ $1/g;
-        
-        if(not $InParamTable)
+        if(not $Stay)
         {
-            if($LINE=~/ \$/) {
+            $LINE = <OUT>;
+            
+            if(not defined $NonEmpty and $LINE) {
+                $NonEmpty = 1;
+            }
+            
+            if($Debug) {
+                $DContent .= $LINE;
+            }
+        }
+        
+        if(not $LINE)
+        {
+            $Run = 0;
+            last;
+        }
+        
+        $Stay = 0;
+        
+        if($LINE=~/\A\s*const/) {
+            next;
+        }
+        
+        if(index($LINE, 'Start  Length')!=-1
+        or index($LINE, 'Compiled from')!=-1
+        or index($LINE, 'Last modified')!=-1
+        or index($LINE, 'MD5 checksum')!=-1
+        or index($LINE, 'Classfile /')==0
+        or index($LINE, 'Classfile jar')==0)
+        {
+            next;
+        }
+        
+        if(index($LINE, '=')!=-1)
+        {
+            if(index($LINE, ' stack=')!=-1
+            or index($LINE, 'frame_type =')!=-1
+            or index($LINE, 'offset_delta =')!=-1)
+            {
                 next;
             }
         }
         
-        $LINE=~s/\$([\> ]|\Z)/$1/g;
-        $LINE_N=~s/\$([\> ]|\Z)/$1/g;
+        if(index($LINE, ':')!=-1)
+        {
+            if(index($LINE, ' LineNumberTable:')!=-1
+            or index($LINE, 'SourceFile:')==0
+            or index($LINE, ' StackMapTable:')!=-1
+            or index($LINE, ' Exceptions:')!=-1
+            or index($LINE, 'Constant pool:')!=-1
+            or index($LINE, 'minor version:')!=-1
+            or index($LINE, 'major version:')!=-1
+            or index($LINE, ' AnnotationDefault:')!=-1)
+            {
+                next;
+            }
+        }
         
-        if($LINE eq "\n" or $LINE eq "}\n")
+        if(index($LINE, " of ")!=-1
+        or index($LINE, "= [")!=-1) {
+            next;
+        }
+        
+        if($LINE=~/ line \d+:|\[\s*class|\$\d|\._\d/)
+        { # artificial methods and code
+            next;
+        }
+        
+        # $LINE=~s/ \$(\w)/ $1/g;
+        
+        if(index($LINE, '$')!=-1)
+        {
+            if(index($LINE, ' class$')!=-1
+            or index($LINE, '$eq')!=-1
+            or index($LINE, '.$')!=-1
+            or index($LINE, '/$')!=-1
+            or index($LINE, '$$')!=-1
+            or index($LINE, '$(')!=-1
+            or index($LINE, '$:')!=-1
+            or index($LINE, '$.')!=-1
+            or index($LINE, '$;')!=-1) {
+                next;
+            }
+            
+            if($LINE=~/ (\w+\$|)\w+\$\w+[\(:]/) {
+                next;
+            }
+            
+            if(not $InParamTable and not $InVarTypeTable)
+            {
+                if(index($LINE, ' $')!=-1) {
+                    next;
+                }
+            }
+            
+            $LINE=~s/\$([\> ]|\s*\Z)/$1/g;
+        }
+        
+        my $EndBr = ($LINE eq "}\n" or $LINE eq "}\r\n");
+        
+        if($EndBr) {
+            $InAnnotations_Class = 1;
+        }
+        
+        if($EndBr or $LINE eq "\n" or $LINE eq "\r\n")
         {
             $CurrentMethod = undef;
             $InCode = 0;
             $InAnnotations_Method = 0;
             $InParamTable = 0;
+            $InVarTypeTable = 0;
+            next;
         }
         
-        if($LINE eq "}\n") {
-            $InAnnotations_Class = 1;
-        }
-        
-        if($LINE=~/\A\s*#(\d+)/)
-        { # Constant pool
-            my $CNum = $1;
-            if($LINE=~/\s+([^ ]+?);/)
-            {
-                my $AName = $1;
-                $AName=~s/\AL//;
-                $AName=~s/\$/./g;
-                $AName=~s/\//./g;
-                
-                $AnnotationName{$CNum} = $AName;
-                
-                if(defined $AnnotationNum{$CNum})
-                { # support for Java 7
-                    if($InAnnotations_Class) {
-                        $TypeAttr{"Annotations"}{registerType($AName, $LVer)} = 1;
+        if(index($LINE, '#')!=-1)
+        {
+            if($LINE=~/\A\s*#(\d+)/)
+            { # Constant pool
+                my $CNum = $1;
+                if($LINE=~/\s+([^ ]+?);/)
+                {
+                    my $AName = $1;
+                    $AName=~s/\AL//;
+                    $AName=~s/\$/./g;
+                    $AName=~s/\//./g;
+                    
+                    $AnnotationName{$CNum} = $AName;
+                    
+                    if(defined $AnnotationNum{$CNum})
+                    { # support for Java 7
+                        if($InAnnotations_Class) {
+                            $TypeAttr{"Annotations"}{registerType($AName, $LVer)} = 1;
+                        }
+                        delete($AnnotationNum{$CNum});
                     }
-                    delete($AnnotationNum{$CNum});
                 }
+                
+                next;
             }
             
-            next;
+            if(index($LINE, ": #")!=-1 and index($LINE, "//")!=-1) {
+                next;
+            }
         }
         
         my $TmplP = undef;
@@ -424,21 +491,30 @@ sub readClasses($$$)
             }
         }
         
-        $LINE=~s/\s*,\s*/,/g;
-        $LINE=~s/\$/#/g;
+        if(index($LINE, ',')!=-1) {
+            $LINE=~s/\s*,\s*/,/g;
+        }
+        
+        if(index($LINE, '$')!=-1) {
+            $LINE=~s/\$/#/g;
+        }
         
         if(index($LINE, "LocalVariableTable")!=-1) {
             $InParamTable += 1;
         }
-        elsif($LINE=~/Exception\s+table/) {
+        elsif(index($LINE, "LocalVariableTypeTable")!=-1) {
+            $InVarTypeTable += 1;
+        }
+        elsif(index($LINE, "Exception table")!=-1) {
             $InExceptionTable = 1;
         }
-        elsif($LINE=~/\A\s*Code:/)
+        elsif(index($LINE, " Code:")!=-1)
         {
             $InCode += 1;
             $InAnnotations = undef;
         }
-        elsif($LINE=~/\A\s*\d+:\s*(.*)\Z/)
+        elsif(index($LINE, ':')!=-1
+        and $LINE=~/\A\s*\d+:\s*/)
         { # read Code
             if($InCode==1)
             {
@@ -446,7 +522,7 @@ sub readClasses($$$)
                 {
                     if(index($LINE, "invoke")!=-1)
                     {
-                        if($LINE=~/ invoke(\w+) .* \/\/\s*(Method|InterfaceMethod)\s+(.+)\Z/)
+                        if($LINE=~/ invoke(\w+) .* \/\/\s*(Method|InterfaceMethod)\s+(.+?)\s*\Z/)
                         { # 3:   invokevirtual   #2; //Method "[Lcom/sleepycat/je/Database#DbState;".clone:()Ljava/lang/Object;
                             my ($InvokeType, $InvokedName) = ($1, $3);
                             
@@ -468,7 +544,7 @@ sub readClasses($$$)
                             }
                         }
                     }
-                    # elsif($LINE=~/ (getstatic|putstatic) .* \/\/\s*Field\s+(.+)\Z/)
+                    # elsif($LINE=~/ (getstatic|putstatic) .* \/\/\s*Field\s+(.+?)\s*\Z/)
                     # {
                     #     my $UsedFieldName = $2;
                     #     $In::API{$LVer}{"FieldUsed"}{$UsedFieldName}{$CurrentMethod} = 1;
@@ -495,33 +571,42 @@ sub readClasses($$$)
                 }
             }
         }
-        elsif($CurrentMethod and $InParamTable==1 and $LINE=~/\A\s+0\s+\d+\s+\d+\s+(\#?)(\w+)/)
+        elsif($InParamTable==1 and $LINE=~/\A\s+\d/)
         { # read parameter names from LocalVariableTable
-            my $Art = $1;
-            my $PName = $2;
-            
-            if(($PName ne "this" or $Art) and $PName=~/[a-z]/i)
+            if($CurrentMethod and $LINE=~/\A\s+0\s+\d+\s+\d+\s+(\#?)(\w+)/)
             {
-                if($CurrentMethod)
+                my $Art = $1;
+                my $PName = $2;
+                
+                if(($PName ne "this" or $Art) and $PName=~/[a-z]/i)
                 {
-                    my $ID = $MName_Mid{$CurrentMethod};
-                    
-                    if(defined $MethodInfo{$LVer}{$ID}
-                    and defined $MethodInfo{$LVer}{$ID}{"Param"}
-                    and defined $MethodInfo{$LVer}{$ID}{"Param"}{$ParamPos}
-                    and defined $MethodInfo{$LVer}{$ID}{"Param"}{$ParamPos}{"Type"})
+                    if($CurrentMethod)
                     {
-                        $MethodInfo{$LVer}{$ID}{"Param"}{$ParamPos}{"Name"} = $PName;
-                        $ParamPos++;
+                        my $ID = $MName_Mid{$CurrentMethod};
+                        
+                        if(defined $MethodInfo{$LVer}{$ID}
+                        and defined $MethodInfo{$LVer}{$ID}{"Param"}
+                        and defined $MethodInfo{$LVer}{$ID}{"Param"}{$ParamPos}
+                        and defined $MethodInfo{$LVer}{$ID}{"Param"}{$ParamPos}{"Type"})
+                        {
+                            $MethodInfo{$LVer}{$ID}{"Param"}{$ParamPos}{"Name"} = $PName;
+                            $ParamPos++;
+                        }
                     }
                 }
             }
         }
-        elsif($CurrentClass and $LINE=~/(\A|\s+)([^\s]+)\s+([^\s]+)\s*\((.*)\)\s*(throws\s*([^\s]+)|)\s*;\Z/)
+        elsif($InVarTypeTable==1 and $LINE=~/\A\s+\d/)
+        {
+            # skip
+        }
+        elsif($CurrentClass and index($LINE, '(')!=-1
+        and $LINE=~/(\A|\s+)([^\s]+)\s+([^\s]+)\s*\((.*)\)\s*(throws\s*([^\s]+)|)\s*;\s*\Z/)
         { # attributes of methods and constructors
             my (%MethodAttr, $ParamsLine, $Exceptions) = ();
             
             $InParamTable = 0; # read the first local variable table
+            $InVarTypeTable = 0;
             $InCode = 0; # read the first code
             $InAnnotations_Method = 1;
             $InAnnotations_Class = 0;
@@ -589,8 +674,18 @@ sub readClasses($$$)
                 }
             }
             
+            my $LINE_N = <OUT>;
+            
+            if($Debug) {
+                $DContent .= $LINE_N;
+            }
+            
+            # $LINE_N=~s/ \$(\w)/ $1/g;
+            $LINE_N=~s/\$([\> ]|\s*\Z)/$1/g;
+            
             # read the Signature
-            if($LINE_N=~/(Signature|descriptor):\s*(.+)\Z/i)
+            if(index($LINE_N, ": #")==-1
+            and $LINE_N=~/(Signature|descriptor):\s*(.+?)\s*\Z/i)
             { # create run-time unique name ( java/io/PrintStream.println (Ljava/lang/String;)V )
                 if($MethodAttr{"Constructor"}) {
                     $CurrentMethod = $CurrentClass.".\"<init>\":".$2;
@@ -601,8 +696,6 @@ sub readClasses($$$)
                 if(my $PackageName = getSFormat($CurrentPackage)) {
                     $CurrentMethod = $PackageName."/".$CurrentMethod;
                 }
-                
-                $LineNum++;
             }
             else {
                 exitStatus("Error", "internal error - can't read method signature");
@@ -631,7 +724,7 @@ sub readClasses($$$)
                 $MethodInfo{$LVer}{$ID} = \%MethodAttr;
             }
         }
-        elsif($CurrentClass and $LINE=~/(\A|\s+)([^\s]+)\s+(\w+);\Z/)
+        elsif($CurrentClass and $LINE=~/(\A|\s+)([^\s]+)\s+(\w+);\s*\Z/)
         { # fields
             my ($TName, $FName) = ($2, $3);
             $TypeAttr{"Fields"}{$FName}{"Type"} = registerType($TName, $LVer);
@@ -656,25 +749,44 @@ sub readClasses($$$)
             
             $TypeAttr{"Fields"}{$FName}{"Pos"} = $FieldPos++;
             
+            my $LINE_NP = <OUT>;
+            if($Debug) {
+                $DContent .= $LINE_NP;
+            }
+            
             # read the Signature
-            if($Content[$LineNum++]=~/(Signature|descriptor):\s*(.+)\Z/i)
+            if(index($LINE_NP, ": #")==-1
+            and $LINE_NP=~/(Signature|descriptor):\s*(.+?)\s*\Z/i)
             {
                 my $FSignature = $2;
                 if(my $PackageName = getSFormat($CurrentPackage)) {
                     $TypeAttr{"Fields"}{$FName}{"Mangled"} = $PackageName."/".$CurrentClass.".".$FName.":".$FSignature;
                 }
             }
-            if($Content[$LineNum]=~/flags:/i)
+            
+            $LINE_NP = <OUT>;
+            if($Debug) {
+                $DContent .= $LINE_NP;
+            }
+            
+            if($LINE_NP=~/flags:/i)
             { # flags: ACC_PUBLIC, ACC_STATIC, ACC_FINAL, ACC_ANNOTATION
-                $LineNum++;
+                $LINE_NP = <OUT>;
+                if($Debug) {
+                    $DContent .= $LINE_NP;
+                }
+            }
+            else
+            {
+                $LINE = $LINE_NP;
+                $Stay = 1;
             }
             
             # read the Value
-            if($Content[$LineNum]=~/Constant\s*value:\s*([^\s]+)\s(.*)\Z/i)
+            if($LINE_NP=~/Constant\s*value:\s*([^\s]+)\s(.*?)\s*\Z/i)
             {
               # Java 6: Constant value: ...
               # Java 7: ConstantValue: ...
-                $LineNum+=1;
                 my ($TName, $Value) = ($1, $2);
                 if($Value)
                 {
@@ -687,8 +799,13 @@ sub readClasses($$$)
                     $TypeAttr{"Fields"}{$FName}{"Value"} = "\@EMPTY_STRING\@";
                 }
             }
+            else
+            {
+                $LINE = $LINE_NP;
+                $Stay = 1;
+            }
         }
-        elsif($LINE=~/(\A|\s+)(class|interface)\s+([^\s\{]+)(\s+|\{|\Z)/)
+        elsif($LINE=~/(\A|\s+)(class|interface)\s+([^\s\{]+)(\s+|\{|\s*\Z)/)
         { # properties of classes and interfaces
             if($TypeAttr{"Name"})
             { # register previous
@@ -792,9 +909,21 @@ sub readClasses($$$)
             # unparsed
         }
     }
+    
     if($TypeAttr{"Name"})
     { # register last
         %{$TypeInfo{$LVer}{registerType($TypeAttr{"Name"}, $LVer)}} = %TypeAttr;
+    }
+    
+    waitpid($Pid, 0);
+    chdir($In::Opt{"OrigDir"});
+    
+    if(not $NonEmpty) {
+        exitStatus("Error", "internal error in parser");
+    }
+    
+    if($Debug) {
+        appendFile(getDebugDir($LVer)."/class-dump.txt", $DContent);
     }
 }
 
@@ -858,7 +987,7 @@ sub readClasses_Usage($)
     open(CONTENT, "$JavapCmd -c -private $Input 2>\"$TmpDir/warn\" |");
     while(<CONTENT>)
     {
-        if(/\/\/\s*(Method|InterfaceMethod)\s+(.+)\Z/)
+        if(/\/\/\s*(Method|InterfaceMethod)\s+(.+)\s*\Z/)
         {
             my $M = $2;
             $In::Opt{"UsedMethods_Client"}{$M} = 1;
@@ -870,7 +999,7 @@ sub readClasses_Usage($)
                 $In::Opt{"UsedClasses_Client"}{$C} = 1;
             }
         }
-        elsif(/\/\/\s*Field\s+(.+)\Z/)
+        elsif(/\/\/\s*Field\s+(.+)\s*\Z/)
         {
             # my $FieldName = $1;
             # if(/\s+(putfield|getfield|getstatic|putstatic)\s+/) {

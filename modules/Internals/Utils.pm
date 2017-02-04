@@ -1,7 +1,7 @@
 ###########################################################################
 # A module with basic functions
 #
-# Copyright (C) 2017 Andrey Ponomarenko's ABI Laboratory
+# Copyright (C) 2016-2017 Andrey Ponomarenko's ABI Laboratory
 #
 # Written by Andrey Ponomarenko
 #
@@ -19,8 +19,7 @@
 # If not, see <http://www.gnu.org/licenses/>.
 ###########################################################################
 use strict;
-
-my $ARG_MAX = getArgMax();
+use POSIX;
 
 sub initAPI($)
 {
@@ -48,24 +47,40 @@ sub setTarget($)
     $In::Opt{"Target"} = $Target;
 }
 
-sub getArgMax()
+sub getMaxLen()
 {
     if($In::Opt{"OS"} eq "windows") {
-        return 1990;
+        return 8191;
     }
-    else
-    { # Linux
-      # TODO: set max possible value (~131000)
-        return 32767;
+    
+    return undef;
+}
+
+sub getMaxArg()
+{
+    if($In::Opt{"OS"} eq "windows") {
+        return undef;
     }
+    
+    # Linux
+    return POSIX::sysconf(POSIX::_SC_ARG_MAX);
 }
 
 sub divideArray($)
 {
     my $ArrRef = $_[0];
     
-    my @Array = @{$ArrRef};
     return () if($#{$ArrRef}==-1);
+    
+    my $LEN_MAX = getMaxLen();
+    my $ARG_MAX = getMaxArg();
+    
+    if(defined $ARG_MAX)
+    { # Linux
+        if($#{$ArrRef} < $ARG_MAX - 500) {
+            return $ArrRef;
+        }
+    }
     
     my @Res = ();
     my $Sub = [];
@@ -75,7 +90,18 @@ sub divideArray($)
     {
         my $Arg = $ArrRef->[$Pos];
         my $Arg_L = length($Arg) + 1; # space
-        if($Len < $ARG_MAX - 250)
+        
+        my ($LenLimit, $ArgLimit) = (1, 1);
+        
+        if(defined $LEN_MAX) {
+            $LenLimit = ($Len < $LEN_MAX - 500);
+        }
+        
+        if(defined $ARG_MAX) {
+            $ArgLimit = ($#{$Sub} < $ARG_MAX - 500);
+        }
+        
+        if($LenLimit and $ArgLimit)
         {
             push(@{$Sub}, $Arg);
             $Len += $Arg_L;
@@ -96,41 +122,59 @@ sub divideArray($)
     return @Res;
 }
 
-sub cmdFind($$$$)
-{
-    my ($Path, $Type, $Name, $MaxDepth) = @_;
+sub cmdFind(@)
+{ # native "find" is much faster than File::Find (~6x)
+  # also the File::Find doesn't support --maxdepth N option
+  # so using the cross-platform wrapper for the native one
+    my ($Path, $Type, $Name, $MaxDepth, $UseRegex) = ();
+    
+    $Path = shift(@_);
+    if(@_) {
+        $Type = shift(@_);
+    }
+    if(@_) {
+        $Name = shift(@_);
+    }
+    if(@_) {
+        $MaxDepth = shift(@_);
+    }
+    if(@_) {
+        $UseRegex = shift(@_);
+    }
     
     my $TmpDir = $In::Opt{"Tmp"};
+    my $TmpFile = $TmpDir."/null";
     
     if($In::Opt{"OS"} eq "windows")
     {
-        $Path=~s/[\\]+\Z//;
         $Path = getAbsPath($Path);
-        my $Cmd = "dir \"$Path\" /B /O";
+        my $Cmd = "cmd /C dir \"$Path\" /B /O";
         if($MaxDepth!=1) {
             $Cmd .= " /S";
         }
         if($Type eq "d") {
             $Cmd .= " /AD";
         }
-        my @Files = ();
-        if($Name)
-        { # FIXME: how to search file names in MS shell?
-            $Name=~s/\*/.*/g if($Name!~/\]/);
-            foreach my $File (split(/\n/, `$Cmd`))
-            {
-                if($File=~/$Name\Z/i) {
-                    push(@Files, $File);    
-                }
-            }
+        elsif($Type eq "f") {
+            $Cmd .= " /A-D";
         }
-        else {
-            @Files = split(/\n/, `$Cmd 2>\"$TmpDir/null\"`);
+        
+        my @Files = split(/\n/, qx/$Cmd/);
+        
+        if($Name)
+        {
+            if(not $UseRegex)
+            { # FIXME: how to search file names in MS shell?
+              # wildcard to regexp
+                $Name=~s/\*/.*/g;
+                $Name='\A'.$Name.'\Z';
+            }
+            @Files = grep { /$Name/i } @Files;
         }
         my @AbsPaths = ();
         foreach my $File (@Files)
         {
-            if(not isAbs($File)) {
+            if(not isAbsPath($File)) {
                 $File = join_P($Path, $File);
             }
             if($Type eq "f" and not -f $File)
@@ -163,16 +207,20 @@ sub cmdFind($$$$)
         if($Type) {
             $Cmd .= " -type $Type";
         }
-        if($Name)
-        {
-            if($Name=~/\]/) {
-                $Cmd .= " -regex \"$Name\"";
-            }
-            else {
-                $Cmd .= " -name \"$Name\"";
-            }
+        if($Name and not $UseRegex)
+        { # wildcards
+            $Cmd .= " -name \"$Name\"";
         }
-        return split(/\n/, `$Cmd 2>\"$TmpDir/null\"`);
+        my $Res = qx/$Cmd 2>"$TmpFile"/;
+        if($? and $!) {
+            printMsg("ERROR", "problem with \'find\' utility ($?): $!");
+        }
+        my @Files = split(/\n/, $Res);
+        if($Name and $UseRegex)
+        { # regex
+            @Files = grep { /$Name/ } @Files;
+        }
+        return @Files;
     }
 }
 
