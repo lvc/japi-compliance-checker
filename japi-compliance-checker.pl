@@ -290,10 +290,12 @@ EXTRA OPTIONS:
         *examples*
   
   -skip-internal-packages PATTERN
-      Do not check packages matched by the pattern.
+      Do not check packages matched by the regular expression.
   
   -skip-internal-types PATTERN
-      Do not check types (classes and interfaces) matched by the pattern.
+      Do not check types (classes and interfaces) matched by the regular
+      expression. It's matched against full qualified type names (e.g.
+      'org.xyz.Name<T>'). It has to match any part of type name.
   
   -dump|-dump-api PATH
       Dump library API to gzipped TXT format file. You can transfer it
