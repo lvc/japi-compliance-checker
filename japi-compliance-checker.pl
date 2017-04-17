@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 ###########################################################################
-# Java API Compliance Checker (JAPICC) 2.1
+# Java API Compliance Checker (JAPICC) 2.2
 # A tool for checking backward compatibility of a Java library API
 #
 # Written by Andrey Ponomarenko
@@ -42,7 +42,7 @@ use File::Basename qw(dirname);
 use Cwd qw(abs_path cwd);
 use Data::Dumper;
 
-my $TOOL_VERSION = "2.1";
+my $TOOL_VERSION = "2.2";
 my $API_DUMP_VERSION = "2.1";
 my $API_DUMP_VERSION_MIN = "2.0";
 
@@ -635,7 +635,7 @@ sub mergeClasses()
             next;
         }
         
-        if(not classFilter($Type1, 1, 0)) {
+        if(not classFilter($Type1, 1, 1)) {
             next;
         }
         
@@ -872,7 +872,7 @@ sub mergeTypes($$)
     return {} if(not $Type1{"Archive"} or not $Type2{"Archive"});
     return {} if($Type1{"Name"} ne $Type2{"Name"});
     
-    if(not classFilter(\%Type1, 1, 0)) {
+    if(not classFilter(\%Type1, 1, 1)) {
         return {};
     }
     
