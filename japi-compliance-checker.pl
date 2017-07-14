@@ -62,6 +62,7 @@ loadModule("Filter");
 loadModule("SysFiles");
 loadModule("Descriptor");
 loadModule("Mangling");
+loadModule("APIDump");
 
 # Rules DB
 my %RULES_PATH = (
