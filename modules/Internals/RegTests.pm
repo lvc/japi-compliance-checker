@@ -183,6 +183,157 @@ sub testTool()
         }
     }");
     
+    if(cmpVersions($In::Opt{"CompilerVer"}, "1.5")>=0)
+    {
+        # GenericClass1
+        writeFile($Path_v1."/GenericClass1.java",
+        "package $PackageName;
+        public class GenericClass1<T> {
+            public Integer method(T param) { return 0; }
+        }");
+        writeFile($Path_v2."/GenericClass1.java",
+        "package $PackageName;
+        public class GenericClass1<T> {
+            public Integer method(T param) { return 0; }
+        }");
+        
+        # GenericClass2
+        writeFile($Path_v1."/GenericClass2.java",
+        "package $PackageName;
+        public class GenericClass2<T> {
+            public void method() { }
+        }");
+        writeFile($Path_v2."/GenericClass2.java",
+        "package $PackageName;
+        public class GenericClass2<T> {
+            public void method() { }
+        }");
+        
+        # Class became generic
+        writeFile($Path_v1."/ClassBecameGeneric.java",
+        "package $PackageName;
+        public abstract class ClassBecameGeneric {
+            public ClassBecameGeneric() {}
+            public abstract ClassBecameGeneric doSomething();
+        }");
+        writeFile($Path_v2."/ClassBecameGeneric.java",
+        "package $PackageName;
+        public abstract class ClassBecameGeneric<T> {
+            public ClassBecameGeneric() {}
+            public abstract T doSomething();
+        }");
+        
+        writeFile($TestsPath."/Test_ClassBecameGeneric.java",
+        "import $PackageName.*;
+        class GenerifyingClassDerived extends ClassBecameGeneric {
+            public ClassBecameGeneric doSomething() { return new GenerifyingClassDerived(); }
+            public static void main(String[] args) { }
+        }
+        public class Test_ClassBecameGeneric
+        {
+            public static void main(String[] args) {
+                GenerifyingClassDerived X = new GenerifyingClassDerived();
+                ClassBecameGeneric Res = X.doSomething();
+            }
+        }");
+        
+        # Class became raw
+        writeFile($Path_v1."/ClassBecameRaw.java",
+        "package $PackageName;
+        public class ClassBecameRaw<T extends String> {
+            public void method(T param) { }
+        }");
+        writeFile($Path_v2."/ClassBecameRaw.java",
+        "package $PackageName;
+        public class ClassBecameRaw {
+            public void method(String param) { }
+        }");
+        
+        writeFile($TestsPath."/Test_ClassBecameRaw.java",
+        "import $PackageName.*;
+        public class Test_ClassBecameRaw
+        {
+            public static void main(String[] args) {
+                ClassBecameRaw<String> X = new ClassBecameRaw<String>();
+                X.method(\"XXX\");
+            }
+        }");
+        
+        # Interface became generic
+        writeFile($Path_v1."/InterfaceBecameGeneric.java",
+        "package $PackageName;
+        public interface InterfaceBecameGeneric {
+            public void method();
+        }");
+        writeFile($Path_v2."/InterfaceBecameGeneric.java",
+        "package $PackageName;
+        public interface InterfaceBecameGeneric<T> {
+            public void method();
+        }");
+        
+        # Interface became raw
+        writeFile($Path_v1."/InterfaceBecameRaw.java",
+        "package $PackageName;
+        public interface InterfaceBecameRaw<T> {
+            public void method();
+        }");
+        writeFile($Path_v2."/InterfaceBecameRaw.java",
+        "package $PackageName;
+        public interface InterfaceBecameRaw {
+            public void method();
+        }");
+        
+        writeFile($TestsPath."/Test_InterfaceBecameRaw.java",
+        "import $PackageName.*;
+        class InterfaceBecameRawDerived implements InterfaceBecameRaw<String> {
+            public void method() { }
+            public static void main(String[] args) { }
+        }
+        public class Test_InterfaceBecameRaw
+        {
+            public static void main(String[] args) {
+                InterfaceBecameRawDerived X = new InterfaceBecameRawDerived();
+                X.method();
+            }
+        }");
+        
+        # Changed generic super-class
+        writeFile($Path_v1."/GenericSuperClassChanged.java",
+        "package $PackageName;
+        public class GenericSuperClassChanged extends GenericClass1<String> {
+            public Integer method() { return 0; }
+        }");
+        writeFile($Path_v2."/GenericSuperClassChanged.java",
+        "package $PackageName;
+        public class GenericSuperClassChanged extends GenericClass1<Integer> {
+            public Integer method() { return 0; }
+        }");
+        
+        # Extending class with generic parameters
+        writeFile($Path_v1."/ExtendingClassWithGeneric.java",
+        "package $PackageName;
+        public class ExtendingClassWithGeneric {
+            public void method() { }
+        }");
+        writeFile($Path_v2."/ExtendingClassWithGeneric.java",
+        "package $PackageName;
+        public class ExtendingClassWithGeneric extends GenericClass2<String>
+        {
+        }");
+        
+        # Renamed generic parameter
+        writeFile($Path_v1."/RenamedGenericParameter.java",
+        "package $PackageName;
+        public class RenamedGenericParameter<A extends String> {
+            public void method(A param) { }
+        }");
+        writeFile($Path_v2."/RenamedGenericParameter.java",
+        "package $PackageName;
+        public class RenamedGenericParameter<B extends String> {
+            public void method(B param) { }
+        }");
+    }
+    
     # Abstract_Method_Added_Checked_Exception
     writeFile($Path_v1."/AbstractMethodAddedCheckedException.java",
     "package $PackageName;
@@ -275,13 +426,22 @@ sub testTool()
     writeFile($Path_v1."/ChangedMethodReturnFromVoid.java",
     "package $PackageName;
     public class ChangedMethodReturnFromVoid {
-        public void changedMethod(Integer param1, String[] param2) { }
+        public void changedMethod(Integer param1) { }
     }");
     writeFile($Path_v2."/ChangedMethodReturnFromVoid.java",
     "package $PackageName;
     public class ChangedMethodReturnFromVoid {
-        public Integer changedMethod(Integer param1, String[] param2){
+        public Integer changedMethod(Integer param1){
             return param1;
+        }
+    }");
+    
+    writeFile($TestsPath."/Test_ChangedMethodReturnFromVoid.java",
+    "import $PackageName.*;
+    public class Test_ChangedMethodReturnFromVoid {
+        public static void main(String[] args) {
+            ChangedMethodReturnFromVoid X = new ChangedMethodReturnFromVoid();
+            X.changedMethod(1);
         }
     }");
     
@@ -626,6 +786,7 @@ sub testTool()
     writeFile($TestsPath."/Test_MethodBecameNonDefault.java",
     "import $PackageName.*;
     class Class_MethodBecameNonDefault implements MethodBecameNonDefault {
+        public static void main(String[] args) { }
     };
     
     public class Test_MethodBecameNonDefault
@@ -878,7 +1039,7 @@ sub testTool()
     
     writeFile($TestsPath."/Test_RemovedFieldClass.java",
     "import $PackageName.*;
-    public class Test_RemovedFieldClass extends RemovedFieldClass
+    public class Test_RemovedFieldClass
     {
         public static void main(String[] args)
         {
@@ -1446,7 +1607,9 @@ sub runTests($$$$)
         $TEST_REPORT .= "\n";
     }
     
-    writeFile("$TestsPath/Journal.txt", $TEST_REPORT);
+    my $Journal = $TestsPath."/Journal.txt";
+    writeFile($Journal, $TEST_REPORT);
+    printMsg("INFO", "See journal with test results: $Journal");
 }
 
 sub compileJavaLib($$$)

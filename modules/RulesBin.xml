@@ -366,7 +366,7 @@
         Class_Removed_Abstract_Method
     </id>
     <severity>
-        High
+        Low
     </severity>
     <kind>
         Types
@@ -375,7 +375,7 @@
         Abstract method @target has been removed from this class.
     </change>
     <effect>
-        A client program may be interrupted by **NoSuchMethodError** exception.
+        A client program may change behavior.
     </effect>
 </rule>
 
@@ -802,7 +802,7 @@
         Changed_Super_Class
     </id>
     <severity>
-        Medium
+        Low
     </severity>
     <kind>
         Types
@@ -1155,6 +1155,78 @@
     </change>
     <effect>
         A client program may be interrupted by **IncompatibleClassChangeError** exception.
+    </effect>
+</rule>
+
+<rule>
+    <id>
+        Interface_Became_Generic
+    </id>
+    <severity>
+        Safe
+    </severity>
+    <kind>
+        Types
+    </kind>
+    <change>
+        This interface became **generic** (@new_value).
+    </change>
+    <effect>
+        No effect.
+    </effect>
+</rule>
+
+<rule>
+    <id>
+        Interface_Became_Raw
+    </id>
+    <severity>
+        Low
+    </severity>
+    <kind>
+        Types
+    </kind>
+    <change>
+        This interface became **raw**.
+    </change>
+    <effect>
+        No effect.
+    </effect>
+</rule>
+
+<rule>
+    <id>
+        Class_Became_Generic
+    </id>
+    <severity>
+        Safe
+    </severity>
+    <kind>
+        Types
+    </kind>
+    <change>
+        This class became **generic** (@new_value).
+    </change>
+    <effect>
+        No effect.
+    </effect>
+</rule>
+
+<rule>
+    <id>
+        Class_Became_Raw
+    </id>
+    <severity>
+        Low
+    </severity>
+    <kind>
+        Types
+    </kind>
+    <change>
+        This class became **raw**.
+    </change>
+    <effect>
+        No effect.
     </effect>
 </rule>
 
