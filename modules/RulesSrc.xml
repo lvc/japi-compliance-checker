@@ -39,6 +39,24 @@
 
 <rule>
     <id>
+        Changed_Method_Return
+    </id>
+    <severity>
+        Medium
+    </severity>
+    <kind>
+        Methods
+    </kind>
+    <change>
+        Return value type has been changed from @old_value to @new_value.
+    </change>
+    <effect>
+        Recompilation of a client program may be terminated with the message: incompatible types: @new_value cannot be converted to @old_value.
+    </effect>
+</rule>
+
+<rule>
+    <id>
         Static_Method_Became_Final
     </id>
     <severity>
@@ -257,6 +275,42 @@
     <kind>
         Methods
     </kind>
+</rule>
+
+<rule>
+    <id>
+        Variable_Arity_To_Array
+    </id>
+    <severity>
+        Medium
+    </severity>
+    <kind>
+        Methods
+    </kind>
+    <change>
+        Type of parameter @param_name has been changed from @old_value to @new_value.
+    </change>
+    <effect>
+        Recompilation of a client program may be terminated with the message: method @method_short in class @type_name cannot be applied to given types.
+    </effect>
+</rule>
+
+<rule>
+    <id>
+        Array_To_Variable_Arity
+    </id>
+    <severity>
+        Safe
+    </severity>
+    <kind>
+        Methods
+    </kind>
+    <change>
+        Type of parameter @param_name has been changed from @old_value to @new_value.
+    </change>
+    <effect>
+        No effect.
+    </effect>
 </rule>
 
 <rule>
@@ -946,6 +1000,42 @@
 
 <rule>
     <id>
+        Field_Became_NonFinal
+    </id>
+    <severity>
+        Safe
+    </severity>
+    <kind>
+        Fields
+    </kind>
+    <change>
+        Field @target became non-final.
+    </change>
+    <effect>
+        No effect.
+    </effect>
+</rule>
+
+<rule>
+    <id>
+        NonConstant_Field_Became_Static
+    </id>
+    <severity>
+        Safe
+    </severity>
+    <kind>
+        Fields
+    </kind>
+    <change>
+        Field @target became static.
+    </change>
+    <effect>
+        No effect.
+    </effect>
+</rule>
+
+<rule>
+    <id>
         NonConstant_Field_Became_NonStatic
     </id>
     <severity>
@@ -1048,7 +1138,7 @@
         This interface became **raw**.
     </change>
     <effect>
-        Recompilation of a client program may be terminated with the message: type @type_name does not take parameters.
+        Recompilation of a client program may be terminated with the message: type @new_value does not take parameters.
     </effect>
 </rule>
 
@@ -1084,7 +1174,7 @@
         This class became **raw**.
     </change>
     <effect>
-        Recompilation of a client program may be terminated with the message: type @type_name does not take parameters.
+        Recompilation of a client program may be terminated with the message: type @new_value does not take parameters.
     </effect>
 </rule>
 

@@ -220,9 +220,9 @@ sub sepParams($$$)
     return @Parts;
 }
 
-sub simpleDecl($)
+sub simpleDecl($$)
 {
-    my $Line = $_[0];
+    my ($Line, $LVer) = @_;
     
     my %B = ( "<"=>0, ">"=>0 );
     my @Chars = split("", $Line);
@@ -287,7 +287,7 @@ sub simpleDecl($)
     foreach my $R (@Replace)
     {
         if($Line=~s/([A-Za-z\d\?]+) extends \Q$R\E/$1/) {
-            $Tmpl{$1} = $R;
+            $Tmpl{$1} = registerType($R, $LVer);
         }
     }
     
@@ -488,7 +488,7 @@ sub readClasses($$$)
         { # <T extends java.lang.Object>
           # <KEYIN extends java.lang.Object ...
             if($LINE=~/<[A-Z\d\?]+ /i) {
-                ($LINE, $TmplP) = simpleDecl($LINE);
+                ($LINE, $TmplP) = simpleDecl($LINE, $LVer);
             }
         }
         
@@ -898,6 +898,10 @@ sub readClasses($$$)
             if($LINE=~/(\A|\s+)static\s+/) {
                 $TypeAttr{"Static"} = 1;
             }
+            
+            if($TmplP) {
+                $TypeAttr{"GenericParam"} = $TmplP;
+            }
         }
         elsif(index($LINE, "Deprecated: true")!=-1
         or index($LINE, "Deprecated: length")!=-1)
@@ -978,6 +982,14 @@ sub registerType($$)
         {
             $TypeInfo{$LVer}{$Tid}{"BaseType"} = $BaseTypeId;
             $TypeInfo{$LVer}{$Tid}{"Type"} = "array";
+        }
+    }
+    elsif($TName=~/(.+)\.\.\.\Z/)
+    {
+        if(my $BaseTypeId = registerType($1, $LVer))
+        {
+            $TypeInfo{$LVer}{$Tid}{"BaseType"} = $BaseTypeId;
+            $TypeInfo{$LVer}{$Tid}{"Type"} = "variable-arity";
         }
     }
     

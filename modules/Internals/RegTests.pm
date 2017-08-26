@@ -79,23 +79,6 @@ sub testTool()
     writeFile($Path_v1."/BaseAbstractClass.java", $BaseAbstractClass);
     writeFile($Path_v2."/BaseAbstractClass.java", $BaseAbstractClass);
     
-    # Removed_Annotation
-    writeFile($Path_v1."/RemovedAnnotation.java",
-    "package $PackageName;
-    public \@interface RemovedAnnotation {
-    }");
-    
-    # Beta Annotation
-    writeFile($Path_v1."/Beta.java",
-    "package $PackageName;
-    public \@interface Beta {
-    }");
-    
-    writeFile($Path_v2."/Beta.java",
-    "package $PackageName;
-    public \@interface Beta {
-    }");
-    
     # BaseClass
     my $BaseClass = "package $PackageName;
     public class BaseClass {
@@ -140,48 +123,6 @@ sub testTool()
     }";
     writeFile($Path_v1."/BaseConstantInterface.java", $BaseConstantInterface);
     writeFile($Path_v2."/BaseConstantInterface.java", $BaseConstantInterface);
-    
-    # Removed_Method (Beta method)
-    writeFile($Path_v1."/RemovedBetaMethod.java",
-    "package $PackageName;
-    public class RemovedBetaMethod
-    {
-        \@Beta
-        public Integer someMethod() {
-            return 0;
-        }
-    }");
-    writeFile($Path_v2."/RemovedBetaMethod.java",
-    "package $PackageName;
-    public class RemovedBetaMethod {
-    }");
-    
-    # Removed_Method (from Beta class)
-    writeFile($Path_v1."/RemovedMethodFromBetaClass.java",
-    "package $PackageName;
-    \@Beta
-    public class RemovedMethodFromBetaClass
-    {
-        public Integer someMethod() {
-            return 0;
-        }
-    }");
-    writeFile($Path_v2."/RemovedMethodFromBetaClass.java",
-    "package $PackageName;
-    \@Beta
-    public class RemovedMethodFromBetaClass {
-    }");
-    
-    # Removed_Class (Beta)
-    writeFile($Path_v1."/RemovedBetaClass.java",
-    "package $PackageName;
-    \@Beta
-    public class RemovedBetaClass
-    {
-        public Integer someMethod() {
-            return 0;
-        }
-    }");
     
     if(cmpVersions($In::Opt{"CompilerVer"}, "1.5")>=0)
     {
@@ -332,6 +273,186 @@ sub testTool()
         public class RenamedGenericParameter<B extends String> {
             public void method(B param) { }
         }");
+        
+        # Changed field type by introducing of a generic parameter
+        writeFile($Path_v1."/ChangedFieldTypeByGenericParam.java",
+        "package $PackageName;
+        public class ChangedFieldTypeByGenericParam {
+            public ChangedFieldTypeByGenericParam(String param) { f=param; }
+            public void method() { }
+            public String f;
+        }");
+        writeFile($Path_v2."/ChangedFieldTypeByGenericParam.java",
+        "package $PackageName;
+        public class ChangedFieldTypeByGenericParam<T> {
+            public ChangedFieldTypeByGenericParam(T param) { f=param; }
+            public void method() { }
+            public T f;
+        }");
+        
+        writeFile($Path_v1."/TestGeneric.java",
+        "package $PackageName;
+        public class TestGeneric {
+            public ChangedFieldTypeByGenericParam get1() { return new ChangedFieldTypeByGenericParam(\"XXX\"); }
+            public ChangedFieldTypeByGenericParam get2() { return new ChangedFieldTypeByGenericParam(\"XXX\"); }
+        }");
+        writeFile($Path_v2."/TestGeneric.java",
+        "package $PackageName;
+        public class TestGeneric {
+            public ChangedFieldTypeByGenericParam<String>  get1() { return new ChangedFieldTypeByGenericParam<String>(\"XXX\"); }
+            public ChangedFieldTypeByGenericParam<Integer> get2() { return new ChangedFieldTypeByGenericParam<Integer>(0); }
+        }");
+        
+        writeFile($TestsPath."/Test_ChangedFieldTypeByGenericParam.java",
+        "import $PackageName.*;
+        public class Test_ChangedFieldTypeByGenericParam
+        {
+            public static void main(String[] args)
+            {
+                TestGeneric X = new TestGeneric();
+                ChangedFieldTypeByGenericParam Res1 = X.get1();
+                ChangedFieldTypeByGenericParam Res2 = X.get2();
+                Res1.f = Res2.f;
+            }
+        }");
+        
+        # Changed constructor after generifying
+        writeFile($Path_v1."/ChangedCtorAfterGenerifying.java",
+        "package $PackageName;
+        public class ChangedCtorAfterGenerifying {
+            public ChangedCtorAfterGenerifying(String param) { }
+            public String f;
+        }");
+        writeFile($Path_v2."/ChangedCtorAfterGenerifying.java",
+        "package $PackageName;
+        public class ChangedCtorAfterGenerifying<T> {
+            public ChangedCtorAfterGenerifying(T param) { }
+            public T f;
+        }");
+        
+        writeFile($TestsPath."/Test_ChangedCtorAfterGenerifying.java",
+        "import $PackageName.*;
+        public class Test_ChangedCtorAfterGenerifying
+        {
+            public static void main(String[] args) {
+                ChangedCtorAfterGenerifying X = new ChangedCtorAfterGenerifying(\"XXX\");
+            }
+        }");
+        
+        # Array to variable arity
+        writeFile($Path_v1."/ArrayToVariableArity.java",
+        "package $PackageName;
+        public class ArrayToVariableArity {
+            public void method(Integer x, String[] y) { }
+        }");
+        writeFile($Path_v2."/ArrayToVariableArity.java",
+        "package $PackageName;
+        public class ArrayToVariableArity {
+            public void method(Integer x, String... y) { }
+        }");
+        
+        writeFile($TestsPath."/Test_ArrayToVariableArity.java",
+        "import $PackageName.*;
+        public class Test_ArrayToVariableArity
+        {
+            public static void main(String[] args) {
+                ArrayToVariableArity X = new ArrayToVariableArity();
+                X.method(0, new String[]{\"a\", \"b\"});
+            }
+        }");
+        
+        # Variable arity to array
+        writeFile($Path_v1."/VariableArityToArray.java",
+        "package $PackageName;
+        public class VariableArityToArray {
+            public void method(Integer x, String... y) { }
+        }");
+        writeFile($Path_v2."/VariableArityToArray.java",
+        "package $PackageName;
+        public class VariableArityToArray {
+            public void method(Integer x, String[] y) { }
+        }");
+        
+        writeFile($TestsPath."/Test_VariableArityToArray.java",
+        "import $PackageName.*;
+        public class Test_VariableArityToArray
+        {
+            public static void main(String[] args) {
+                VariableArityToArray X = new VariableArityToArray();
+                X.method(0, \"a\", \"b\");
+            }
+        }");
+        
+        # Removed_Annotation
+        writeFile($Path_v1."/RemovedAnnotation.java",
+        "package $PackageName;
+        public \@interface RemovedAnnotation {
+        }");
+        
+        writeFile($TestsPath."/Test_RemovedAnnotation.java",
+        "import $PackageName.*;
+        public class Test_RemovedAnnotation {
+            public static void main(String[] args) {
+                testMethod();
+            }
+            
+            \@RemovedAnnotation
+            static void testMethod() {
+            }
+        }");
+        
+        # Beta Annotation
+        writeFile($Path_v1."/Beta.java",
+        "package $PackageName;
+        public \@interface Beta {
+        }");
+        
+        writeFile($Path_v2."/Beta.java",
+        "package $PackageName;
+        public \@interface Beta {
+        }");
+        
+        # Removed_Method (Beta method)
+        writeFile($Path_v1."/RemovedBetaMethod.java",
+        "package $PackageName;
+        public class RemovedBetaMethod
+        {
+            \@Beta
+            public Integer someMethod() {
+                return 0;
+            }
+        }");
+        writeFile($Path_v2."/RemovedBetaMethod.java",
+        "package $PackageName;
+        public class RemovedBetaMethod {
+        }");
+        
+        # Removed_Method (from Beta class)
+        writeFile($Path_v1."/RemovedMethodFromBetaClass.java",
+        "package $PackageName;
+        \@Beta
+        public class RemovedMethodFromBetaClass
+        {
+            public Integer someMethod() {
+                return 0;
+            }
+        }");
+        writeFile($Path_v2."/RemovedMethodFromBetaClass.java",
+        "package $PackageName;
+        \@Beta
+        public class RemovedMethodFromBetaClass {
+        }");
+        
+        # Removed_Class (Beta)
+        writeFile($Path_v1."/RemovedBetaClass.java",
+        "package $PackageName;
+        \@Beta
+        public class RemovedBetaClass
+        {
+            public Integer someMethod() {
+                return 0;
+            }
+        }");
     }
     
     # Abstract_Method_Added_Checked_Exception
@@ -445,6 +566,27 @@ sub testTool()
         }
     }");
     
+    # Changed_Method_Return
+    writeFile($Path_v1."/ChangedMethodReturn.java",
+    "package $PackageName;
+    public class ChangedMethodReturn {
+        public Integer changedMethod(Integer param) { return 0; }
+    }");
+    writeFile($Path_v2."/ChangedMethodReturn.java",
+    "package $PackageName;
+    public class ChangedMethodReturn {
+        public String changedMethod(Integer param) { return \"XXX\"; }
+    }");
+    
+    writeFile($TestsPath."/Test_ChangedMethodReturn.java",
+    "import $PackageName.*;
+    public class Test_ChangedMethodReturn {
+        public static void main(String[] args) {
+            ChangedMethodReturn X = new ChangedMethodReturn();
+            Integer Res = X.changedMethod(0);
+        }
+    }");
+    
     # Added_Method
     writeFile($Path_v1."/AddedMethod.java",
     "package $PackageName;
@@ -521,18 +663,6 @@ sub testTool()
         }
     }");
     
-    writeFile($TestsPath."/Test_RemovedAnnotation.java",
-    "import $PackageName.*;
-    public class Test_RemovedAnnotation {
-        public static void main(String[] args) {
-            testMethod();
-        }
-        
-        \@RemovedAnnotation
-        static void testMethod() {
-        }
-    }");
-    
     # Removed_Constant_Field (Interface)
     writeFile($Path_v1."/InterfaceRemovedConstantField.java",
     "package $PackageName;
@@ -596,6 +726,15 @@ sub testTool()
         public Integer fieldName;
     }");
     
+    writeFile($TestsPath."/Test_ChangedFieldType.java",
+    "import $PackageName.*;
+    public class Test_ChangedFieldType {
+        public static void main(String[] args) {
+            ChangedFieldType X = new ChangedFieldType();
+            String R = X.fieldName;
+        }
+    }");
+    
     # Changed_Field_Access
     writeFile($Path_v1."/ChangedFieldAccess.java",
     "package $PackageName;
@@ -632,6 +771,15 @@ sub testTool()
     "package $PackageName;
     public class NonConstantFieldBecameStatic {
         public static String fieldName;
+    }");
+    
+    writeFile($TestsPath."/Test_NonConstantFieldBecameStatic.java",
+    "import $PackageName.*;
+    public class Test_NonConstantFieldBecameStatic {
+        public static void main(String[] args) {
+            NonConstantFieldBecameStatic X = new NonConstantFieldBecameStatic();
+            String R = X.fieldName;
+        }
     }");
     
     # NonConstant_Field_Became_NonStatic
@@ -694,6 +842,17 @@ sub testTool()
     "package $PackageName;
     public class RemovedMethod {
         public Integer field = 100;
+    }");
+    
+    # Removed protected method from final class
+    writeFile($Path_v1."/RemovedProtectedMethodFromFinalClass.java",
+    "package $PackageName;
+    public final class RemovedProtectedMethodFromFinalClass {
+        protected void removedMethod(Integer param) { }
+    }");
+    writeFile($Path_v2."/RemovedProtectedMethodFromFinalClass.java",
+    "package $PackageName;
+    public final class RemovedProtectedMethodFromFinalClass {
     }");
     
     # Removed_Method (move up to java.lang.Object)
@@ -796,18 +955,6 @@ sub testTool()
             Class_MethodBecameNonDefault Obj = new Class_MethodBecameNonDefault();
             Integer Res = Obj.someMethod(0);
         }
-    }");
-    
-    # Variable_Arity_To_Array
-    writeFile($Path_v1."/VariableArityToArray.java",
-    "package $PackageName;
-    public class VariableArityToArray {
-        public void someMethod(Integer x, String... y) { };
-    }");
-    writeFile($Path_v2."/VariableArityToArray.java",
-    "package $PackageName;
-    public class VariableArityToArray {
-        public void someMethod(Integer x, String[] y) { };
     }");
     
     # Class_Became_Interface
@@ -1290,19 +1437,29 @@ sub testTool()
     }");
     
     # Static_Method_Became_Final
-    writeFile($Path_v1."/StaticMethodBecameFinal.java",
+    writeFile($Path_v2."/StaticMethodBecameFinal.java",
     "package $PackageName;
     public class StaticMethodBecameFinal {
         public static Integer someMethod(Integer param) {
             return param;
         };
     }");
-    writeFile($Path_v2."/StaticMethodBecameFinal.java",
+    writeFile($Path_v1."/StaticMethodBecameFinal.java",
     "package $PackageName;
     public class StaticMethodBecameFinal {
         public static final Integer someMethod(Integer param) {
             return param;
         };
+    }");
+    
+    writeFile($TestsPath."/Test_StaticMethodBecameFinal.java",
+    "import $PackageName.*;
+    public class Test_StaticMethodBecameFinal
+    {
+        public static void main(String[] args)
+        {
+            Integer R = StaticMethodBecameFinal.someMethod(0);
+        }
     }");
     
     # NonStatic_Method_Became_Final
@@ -1562,6 +1719,8 @@ sub checkJavaCompiler($)
 sub runTests($$$$)
 {
     my ($TestsPath, $PackageName, $Path_v1, $Path_v2) = @_;
+    
+    printMsg("INFO", "Running tests ...");
     
     # compile with old version of package
     my $JavacCmd = getCmdPath("javac");
