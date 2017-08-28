@@ -426,7 +426,7 @@
         Class_Removed_Abstract_Method
     </id>
     <severity>
-        Low
+        High
     </severity>
     <kind>
         Types
@@ -435,7 +435,7 @@
         Abstract method @target has been removed from this class.
     </change>
     <effect>
-        A client program may change behavior.
+        A client program may be interrupted by **NoSuchMethodError** exception.
     </effect>
 </rule>
 

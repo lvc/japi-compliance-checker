@@ -904,6 +904,34 @@ sub testTool()
         public void someMethod(Integer param);
     }");
     
+    # Interface_Removed_Abstract_Method (Last)
+    writeFile($Path_v1."/InterfaceRemovedLastAbstractMethod.java",
+    "package $PackageName;
+    public interface InterfaceRemovedLastAbstractMethod {
+        public void removedMethod(Integer param);
+    }");
+    writeFile($Path_v2."/InterfaceRemovedLastAbstractMethod.java",
+    "package $PackageName;
+    public interface InterfaceRemovedLastAbstractMethod {
+    }");
+    
+    writeFile($TestsPath."/Test_InterfaceRemovedLastAbstractMethod.java",
+    "import $PackageName.*;
+    class InterfaceRemovedLastAbstractMethodDerived implements InterfaceRemovedLastAbstractMethod
+    {
+        public void removedMethod(Integer param) { }
+        public static void main(String[] args) { }
+    };
+    
+    public class Test_InterfaceRemovedLastAbstractMethod
+    {
+        public static void main(String[] args)
+        {
+            InterfaceRemovedLastAbstractMethod Obj = new InterfaceRemovedLastAbstractMethodDerived();
+            Obj.removedMethod(0);
+        }
+    }");
+    
     # Interface_Added_Abstract_Method
     writeFile($Path_v1."/InterfaceAddedAbstractMethod.java",
     "package $PackageName;
@@ -1354,7 +1382,7 @@ sub testTool()
         public Integer someMethod(Integer param1, String[] param2) {
             return param1;
         };
-        public abstract Integer removedMethod(Integer param);
+        public abstract void removedMethod(Integer param);
     }");
     writeFile($Path_v2."/ClassRemovedAbstractMethod.java",
     "package $PackageName;
@@ -1362,6 +1390,23 @@ sub testTool()
         public Integer someMethod(Integer param1, String[] param2) {
             return param1;
         };
+    }");
+    
+    writeFile($TestsPath."/Test_ClassRemovedAbstractMethod.java",
+    "import $PackageName.*;
+    class ClassRemovedAbstractMethodDerived extends ClassRemovedAbstractMethod
+    {
+        public void removedMethod(Integer param) { }
+        public static void main(String[] args) { }
+    };
+    
+    public class Test_ClassRemovedAbstractMethod
+    {
+        public static void main(String[] args)
+        {
+            ClassRemovedAbstractMethod Obj = new ClassRemovedAbstractMethodDerived();
+            Obj.removedMethod(0);
+        }
     }");
     
     # Class_Method_Became_Abstract
@@ -1632,6 +1677,10 @@ sub testTool()
         public Integer someMethod(AbstractClassAddedSuperInterfaceWithImplementedMethods param) {
             return 0;
         }
+        public Integer someMethod(InterfaceRemovedLastAbstractMethod param) {
+            return 0;
+        }
+        
     }");
     writeFile($Path_v2."/Use.java",
     "package $PackageName;
@@ -1657,6 +1706,9 @@ sub testTool()
         }
         public Integer someMethod(AbstractClassAddedSuperInterfaceWithImplementedMethods param) {
             return param.method2(100);
+        }
+        public Integer someMethod(InterfaceRemovedLastAbstractMethod param) {
+            return 0;
         }
     }");
     

@@ -134,7 +134,6 @@ GetOptions("h|help!" => \$In::Opt{"Help"},
   "dep1=s" => \$In::Desc{1}{"DepDump"},
   "dep2=s" => \$In::Desc{2}{"DepDump"},
   "old-style!" => \$In::Opt{"OldStyle"},
-  "list-abstract!" => \$In::Opt{"ListAbstract"},
 # other options
   "test!" => \$In::Opt{"TestTool"},
   "debug!" => \$In::Opt{"Debug"},
@@ -403,9 +402,6 @@ EXTRA OPTIONS:
   
   -old-style
       Generate old-style report.
-  
-  -list-abstract
-      List added and removed abstract methods.
 
 OTHER OPTIONS:
   -test
@@ -3998,11 +3994,8 @@ sub detectAdded()
                 $AddedMethod_Abstract{$Class->{"Name"}}{$Method} = 1;
             }
             
-            if(not $MethodInfo{2}{$Method}{"Abstract"} or defined $In::Opt{"ListAbstract"})
-            {
-                if(not ($MethodInfo{2}{$Method}{"Access"} eq "protected" and $Class->{"Final"})) {
-                    %{$CompatProblems{$Method}{"Added_Method"}{""}} = ();
-                }
+            if(not ($MethodInfo{2}{$Method}{"Access"} eq "protected" and $Class->{"Final"})) {
+                %{$CompatProblems{$Method}{"Added_Method"}{""}} = ();
             }
             
             if(not $MethodInfo{2}{$Method}{"Constructor"})
@@ -4077,11 +4070,8 @@ sub detectRemoved()
                     $RemovedMethod_Abstract{$Class->{"Name"}}{$Method} = 1;
                 }
                 
-                if(not $MethodInfo{1}{$Method}{"Abstract"} or defined $In::Opt{"ListAbstract"})
-                {
-                    if(not ($MethodInfo{1}{$Method}{"Access"} eq "protected" and $Class->{"Final"})) {
-                        %{$CompatProblems{$Method}{"Removed_Method"}{""}} = ();
-                    }
+                if(not ($MethodInfo{1}{$Method}{"Access"} eq "protected" and $Class->{"Final"})) {
+                    %{$CompatProblems{$Method}{"Removed_Method"}{""}} = ();
                 }
             }
         }
@@ -5047,7 +5037,8 @@ sub scenario()
         initAliases(1);
         
         my $Count = 0;
-        foreach my $Method (keys(%{$MethodInfo{1}})) {
+        foreach my $Method (keys(%{$MethodInfo{1}}))
+        {
             $Count += methodFilter($Method, 1);
         }
         
