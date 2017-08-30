@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 ###########################################################################
-# Java API Compliance Checker (JAPICC) 2.2
+# Java API Compliance Checker (JAPICC) 2.3
 # A tool for checking backward compatibility of a Java library API
 #
 # Written by Andrey Ponomarenko
@@ -42,9 +42,9 @@ use File::Basename qw(dirname);
 use Cwd qw(abs_path cwd);
 use Data::Dumper;
 
-my $TOOL_VERSION = "2.2";
+my $TOOL_VERSION = "2.3";
 my $API_DUMP_VERSION = "2.2";
-my $API_DUMP_VERSION_MIN = "2.0";
+my $API_DUMP_VERSION_MIN = "2.2";
 
 # Internal modules
 my $MODULES_DIR = getModules();
