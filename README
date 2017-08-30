@@ -1,4 +1,4 @@
-JAPICC 2.1
+JAPICC 2.2
 ==========
 
 NAME:
@@ -35,4 +35,4 @@ TEST SUITE:
   
     japi-compliance-checker -test
 
-  There are about 80 basic tests in the test suite.
+  There are about 100 basic tests in the test suite.
