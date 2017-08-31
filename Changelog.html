@@ -44,6 +44,181 @@
 <p/>
 <br/>
 
+<b>Version 2.3 (August 30, 2017)</b><br/>
+<b>Bug Fixes</b>
+<ul>
+    <li>
+        Bumped required API dump version to 2.2
+    </li>
+</ul>
+<br/>
+
+<b>Version 2.2 (August 30, 2017)</b><br/>
+<b>Analysis</b>
+<ul>
+    <li>
+        Fixed analysis of generic types
+    </li>
+    <li>
+        Added compatibility rules:
+        <ul>
+            <li>
+                Class_Became_Raw
+            </li>
+            <li>
+                Class_Became_Generic
+            </li>
+            <li>
+                Interface_Became_Raw
+            </li>
+            <li>
+                Interface_Became_Generic
+            </li>
+            <li>
+                Changed_Method_Return
+            </li>
+            <li>
+                Variable_Arity_To_Array
+            </li>
+            <li>
+                Array_To_Variable_Arity
+            </li>
+            <li>
+                Field_Became_NonFinal (Src)
+            </li>
+            <li>
+                NonConstant_Field_Became_Static (Src)
+            </li>
+            <li>
+                Static_Method_Became_Final (Bin)
+            </li>
+        </ul>
+    </li>
+    <li>
+        Fixed rules:
+        <ul>
+            <li>
+                Changed_Field_Type
+            </li>
+            <li>
+                Changed_Method_Return_From_Void
+            </li>
+            <li>
+                *_Added_Abstract_Method*
+            </li>
+        </ul>
+    </li>
+    <li>
+        Fixed anasysis of added/removed super-classes
+    </li>
+    <li>
+        Compare class structure if became generic or raw
+    </li>
+    <li>
+        Check for unknown compatibility rules
+    </li>
+    <li>
+        Do not list added and removed protected methods in final classes
+    </li>
+    <li>
+        Reduced severity of changed super-class
+    </li>
+    <li>
+        Added -check-packages option to check packages matched by the regular expression
+    </li>
+    <li>
+        Fixed filtering of annotated classes
+    </li>
+    <li>
+        Fixed -client option
+    </li>
+</ul>
+<b>Report</b>
+<ul>
+    <li>
+        Show method return type in the problem description
+    </li>
+    <li>
+        Fixed signatures of generic constructors
+    </li>
+    <li>
+        Fixed order of methods in the report
+    </li>
+    <li>
+        Add noindex meta tag to empty reports
+    </li>
+    <li>
+        Fixed styles of the report
+    </li>
+</ul>
+<b>Dump</b>
+<ul>
+    <li>
+        Added GenericParam attribute
+    </li>
+    <li>
+        Fixed Type and BaseType of variable arity parameter
+    </li>
+    <li>
+        Show warning for old API dump versions
+    </li>
+    <li>
+        Increased ID length
+    </li>
+    <li>
+        Fixed methods mangled names in the API dump; old dumps should be recreated
+    </li>
+    <li>
+        Bumped dump version
+    </li>
+</ul>
+<b>Tests</b>
+<ul>
+    <li>
+        Added more test cases
+    </li>
+    <li>
+        Show path to the tests journal
+    </li>
+</ul>
+<b>Misc</b>
+<ul>
+    <li>
+        Properly handle errors of javap
+    </li>
+    <li>
+        Fixed number of arguments passed to javap on Linux
+    </li>
+    <li>
+        Properly handle errors when creating/extracting tarballs
+    </li>
+</ul>
+<br/>
+
+<b>Version 2.1 (February 12, 2017)</b><br/>
+<b>Improvements</b>
+<ul>
+    <li>
+        Two times faster
+    </li>
+</ul>
+<b>Bug Fixes</b>
+<ul>
+    <li>
+        Fixed support for Windows
+    </li>
+    <li>
+        Fixed API dumps
+    </li>
+    <li>
+        Fixed -debug option
+    </li>
+    <li>
+        Fixed -test option
+    </li>
+</ul>
+<br/>
+
 <b>Version 2.0 (January 28, 2017)</b><br/>
 <b>Improvements</b>
 <ul>
