@@ -5,7 +5,7 @@
 #
 # Written by Andrey Ponomarenko
 #
-# Copyright (C) 2011-2017 Andrey Ponomarenko's ABI Laboratory
+# Copyright (C) 2011-2018 Andrey Ponomarenko's ABI Laboratory
 #
 # PLATFORMS
 # =========
@@ -22,8 +22,8 @@
 #    - Active Perl 5 (5.8 or newer)
 #
 # This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License or the GNU Lesser
-# General Public License as published by the Free Software Foundation.
+# it under the terms of the GNU Lesser General Public License as
+# published by the Free Software Foundation.
 #
 # This program is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -109,6 +109,7 @@ GetOptions("h|help!" => \$In::Opt{"Help"},
   "skip-internal-packages|skip-internal=s" => \$In::Opt{"SkipInternalPackages"},
   "skip-internal-types=s" => \$In::Opt{"SkipInternalTypes"},
   "dump|dump-api=s" => \$In::Opt{"DumpAPI"},
+  "check-annotations!" => \$In::Opt{"CheckAnnotations"},
   "check-packages=s" => \$In::Opt{"CheckPackages"},
   "classes-list=s" => \$In::Opt{"ClassListPath"},
   "annotations-list=s" => \$In::Opt{"AnnotationsListPath"},
@@ -116,6 +117,8 @@ GetOptions("h|help!" => \$In::Opt{"Help"},
   "skip-deprecated!" => \$In::Opt{"SkipDeprecated"},
   "skip-classes=s" => \$In::Opt{"SkipClassesList"},
   "skip-packages=s" => \$In::Opt{"SkipPackagesList"},
+  "non-impl=s" => \$In::Opt{"NonImplClassesList"},
+  "non-impl-all!" => \$In::Opt{"NonImplAll"},
   "short" => \$In::Opt{"ShortMode"},
   "dump-path=s" => \$In::Opt{"OutputDumpPath"},
   "report-path=s" => \$In::Opt{"OutputReportPath"},
@@ -304,6 +307,9 @@ EXTRA OPTIONS:
       for debugging the tool. PATH is the path to the Java archive or
       XML descriptor of the library.
   
+  -check-annotations
+      Check for changes in annotations like in any other interfaces.
+  
   -check-packages PATTERN
       Check packages matched by the regular expression. Other packages
       will not be checked.
@@ -324,13 +330,17 @@ EXTRA OPTIONS:
       Skip analysis of deprecated methods and classes.
       
   -skip-classes PATH
-      This option allows to specify a file with a list
-      of classes that should not be checked.
-      
+      List of classes that should not be checked.
+  
   -skip-packages PATH
-      This option allows to specify a file with a list
-      of packages that should not be checked.
-      
+      List of packages that should not be checked.
+  
+  -non-impl PATH
+      List of interfaces that should not be implemented by users.
+  
+  -non-impl-all
+      All interfaces should not be implemented by users.
+  
   -short
       Do not list added/removed methods.
   
@@ -1050,7 +1060,14 @@ sub mergeTypes($$)
         }
         else
         {
-            if(my @InvokedBy = sort keys(%{$MethodUsed{2}{$AddedMethod}}))
+            if(nonImplClass(\%Type1))
+            {
+                %{$SubProblems{"NonImpl_Interface_Added_Abstract_Method"}{getSFormat($AddedMethod)}} = (
+                    "Type_Name"=>$Type1{"Name"},
+                    "Type_Type"=>$Type1{"Type"},
+                    "Target"=>$AddedMethod);
+            }
+            elsif(my @InvokedBy = sort keys(%{$MethodUsed{2}{$AddedMethod}}))
             {
                 %{$SubProblems{"Interface_Added_Abstract_Method_Invoked_By_Others"}{getSFormat($AddedMethod)}} = (
                     "Type_Name"=>$Type1{"Name"},
@@ -1753,8 +1770,14 @@ sub mergeMethods()
         }
         
         my $ClassId1 = $MethodInfo{1}{$Method}{"Class"};
-        my $Class1_Name = getTypeName($ClassId1, 1);
-        my $Class1_Type = getTypeType($ClassId1, 1);
+        my $Class1 = getType($ClassId1, 1);
+        
+        if(not defined $CheckAnnotations and $Class1->{"Annotation"}) {
+            next;
+        }
+        
+        my $Class1_Name = $Class1->{"Name"};
+        my $Class1_Type = $Class1->{"Type"};
         
         $CheckedTypes{$Class1_Name} = 1;
         $CheckedMethods{$Method} = 1;
@@ -3893,6 +3916,7 @@ sub composeHTML_Head($$$$$$$)
     $Head .= "<html xmlns=\"http://www.w3.org/1999/xhtml\" xml:lang=\"en\" lang=\"en\">\n";
     $Head .= "<head>\n";
     $Head .= "<meta http-equiv=\"Content-Type\" content=\"text/html; charset=utf-8\" />\n";
+    $Head .= "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\" />\n";
     $Head .= "<meta name=\"keywords\" content=\"$Keywords\" />\n";
     $Head .= "<meta name=\"description\" content=\"$Description\" />\n";
     
@@ -3973,6 +3997,10 @@ sub detectAdded()
             
             my $Class = getType($MethodInfo{2}{$Method}{"Class"}, 2);
             
+            if(not defined $CheckAnnotations and $Class->{"Annotation"}) {
+                next;
+            }
+            
             $CheckedTypes{$Class->{"Name"}} = 1;
             $CheckedMethods{$Method} = 1;
             
@@ -4046,6 +4074,10 @@ sub detectRemoved()
             }
             
             my $Class = getType($MethodInfo{1}{$Method}{"Class"}, 1);
+            
+            if(not defined $CheckAnnotations and $Class->{"Annotation"}) {
+                next;
+            }
             
             $CheckedTypes{$Class->{"Name"}} = 1;
             $CheckedMethods{$Method} = 1;
@@ -4996,6 +5028,17 @@ sub scenario()
         {
             $Class=~s/\//./g;
             $In::Opt{"SkipClasses"}{$Class} = 1;
+        }
+    }
+    if(my $NonImplClassesList = $In::Opt{"NonImplClassesList"})
+    {
+        if(not -f $NonImplClassesList) {
+            exitStatus("Access_Error", "can't access file \'$NonImplClassesList\'");
+        }
+        foreach my $Class (split(/\n/, readFile($NonImplClassesList)))
+        {
+            $Class=~s/\//./g;
+            $In::Opt{"NonImplClasses"}{$Class} = 1;
         }
     }
     if(my $SkipPackagesList = $In::Opt{"SkipPackagesList"})

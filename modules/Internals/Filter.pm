@@ -90,6 +90,24 @@ sub classFilter($$$)
     return 1;
 }
 
+sub nonImplClass($)
+{
+    my $Class = $_[0];
+    
+    if(defined $In::Opt{"NonImplAll"}) {
+        return 1;
+    }
+    
+    if(defined $In::Opt{"NonImplClassesList"})
+    { # user defined classes
+        if(defined $In::Opt{"NonImplClasses"}{$Class->{"Name"}}) {
+            return 1;
+        }
+    }
+    
+    return 0;
+}
+
 sub methodFilter($$)
 {
     my ($Method, $LVer) = @_;

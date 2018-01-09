@@ -383,6 +383,28 @@ sub testTool()
             }
         }");
         
+        # Added vararg parameter
+        writeFile($Path_v1."/AddedVarargParam.java",
+        "package $PackageName;
+        public class AddedVarargParam {
+            public void method(Integer x, String... y) { }
+        }");
+        writeFile($Path_v2."/AddedVarargParam.java",
+        "package $PackageName;
+        public class AddedVarargParam {
+            public void method(Integer x, String... y) { }
+        }");
+        
+        writeFile($TestsPath."/Test_AddedVarargParam.java",
+        "import $PackageName.*;
+        public class Test_AddedVarargParam
+        {
+            public static void main(String[] args) {
+                AddedVarargParam X = new AddedVarargParam();
+                X.method(0);
+            }
+        }");
+        
         # Removed_Annotation
         writeFile($Path_v1."/RemovedAnnotation.java",
         "package $PackageName;
@@ -1918,6 +1940,9 @@ sub runChecker($$$)
     }
     if(defined $In::Opt{"OldStyle"}) {
         $Cmd .= " -old-style";
+    }
+    if(my $JdkPath = $In::Opt{"JdkPath"}) {
+        $Cmd .= " -jdk-path \"$JdkPath\"";
     }
     
     my $TmpDir = $In::Opt{"Tmp"};

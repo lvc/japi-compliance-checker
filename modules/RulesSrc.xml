@@ -441,6 +441,24 @@
 
 <rule>
     <id>
+        NonImpl_Interface_Added_Abstract_Method
+    </id>
+    <severity>
+        Safe
+    </severity>
+    <kind>
+        Types
+    </kind>
+    <change>
+        Abstract method @target has been added to this interface.
+    </change>
+    <effect>
+        No effect. This interface is not meant to be implemented by users.
+    </effect>
+</rule>
+
+<rule>
+    <id>
         Class_Method_Became_Abstract
     </id>
     <severity>
