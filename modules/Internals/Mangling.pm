@@ -65,9 +65,6 @@ sub unmangle($)
                 elsif($Symbol eq "S") {
                     $CurParam = "short";
                 }
-                elsif($Symbol eq "S") {
-                    $CurParam = "short";
-                }
                 elsif($Symbol eq "I") {
                     $CurParam = "int";
                 }
@@ -79,6 +76,9 @@ sub unmangle($)
                 }
                 elsif($Symbol eq "D") {
                     $CurParam = "double";
+                }
+                elsif($Symbol eq "Z") {
+                    $CurParam = "boolean";
                 }
                 else {
                     printMsg("INFO", "WARNING: unmangling error");

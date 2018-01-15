@@ -1,6 +1,6 @@
 #!/usr/bin/perl
-###########################################################################
-# Java API Compliance Checker (JAPICC) 2.3
+#########################################################################
+# Java API Compliance Checker (JAPICC) 2.4
 # A tool for checking backward compatibility of a Java library API
 #
 # Written by Andrey Ponomarenko
@@ -21,19 +21,21 @@
 #    - JDK or OpenJDK (javap, javac)
 #    - Active Perl 5 (5.8 or newer)
 #
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU Lesser General Public License as
-# published by the Free Software Foundation.
+# This library is free software; you can redistribute it and/or
+# modify it under the terms of the GNU Lesser General Public
+# License as published by the Free Software Foundation; either
+# version 2.1 of the License, or (at your option) any later version.
 #
-# This program is distributed in the hope that it will be useful,
+# This library is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+# Lesser General Public License for more details.
 #
-# You should have received a copy of the GNU General Public License
-# and the GNU Lesser General Public License along with this program.
-# If not, see <http://www.gnu.org/licenses/>.
-###########################################################################
+# You should have received a copy of the GNU Lesser General Public
+# License along with this library; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
+# MA  02110-1301  USA.
+#########################################################################
 use Getopt::Long;
 Getopt::Long::Configure ("posix_default", "no_ignore_case", "permute");
 use File::Path qw(mkpath rmtree);
@@ -42,8 +44,8 @@ use File::Basename qw(dirname);
 use Cwd qw(abs_path cwd);
 use Data::Dumper;
 
-my $TOOL_VERSION = "2.3";
-my $API_DUMP_VERSION = "2.2";
+my $TOOL_VERSION = "2.4";
+my $API_DUMP_VERSION = "2.3";
 my $API_DUMP_VERSION_MIN = "2.2";
 
 # Internal modules
@@ -810,6 +812,116 @@ sub mergeClasses()
                                 "Type_Name"=>$ClassName,
                                 "Type_Type"=>$Class1->{"Type"},
                                 "Field_Type"=>getTypeName($FieldInfo->{"Type"}, 1));
+                        }
+                    }
+                }
+            }
+            
+            if(defined $Class1->{"Annotation"})
+            {
+                my %AnnParam = ();
+                foreach my $VN (1, 2)
+                {
+                    foreach my $Method (keys(%{$Class_Methods{$VN}{$ClassName}}))
+                    {
+                        my $MInfo = $MethodInfo{$VN}{$Method};
+                        $AnnParam{$VN}{$MInfo->{"ShortName"}} = {"Default"=>$MInfo->{"Default"}, "Return"=>getTypeName($MInfo->{"Return"}, $VN)};
+                    }
+                }
+                foreach my $AParam (sort keys(%{$AnnParam{1}}))
+                {
+                    my $R1 = $AnnParam{1}{$AParam}{"Return"};
+                    my $D1 = $AnnParam{1}{$AParam}{"Default"};
+                    
+                    if(defined $AnnParam{2}{$AParam})
+                    {
+                        my $R2 = $AnnParam{2}{$AParam}{"Return"};
+                        my $D2 = $AnnParam{2}{$AParam}{"Default"};
+                        
+                        if($R1 ne $R2)
+                        {
+                            if($R1 eq "java.lang.String" and $R2 eq "java.lang.String[]")
+                            {
+                                %{$CompatProblems{".client_method"}{"Annotation_Element_Changed_Type_Safe"}{$AParam}} = (
+                                    "Type_Name"=>$ClassName,
+                                    "Old_Value"=>$R1,
+                                    "New_Value"=>$R2,
+                                    "Target"=>$AParam);
+                            }
+                            else
+                            {
+                                %{$CompatProblems{".client_method"}{"Annotation_Element_Changed_Type"}{$AParam}} = (
+                                    "Type_Name"=>$ClassName,
+                                    "Old_Value"=>$R1,
+                                    "New_Value"=>$R2,
+                                    "Target"=>$AParam);
+                            }
+                        }
+                        
+                        if(defined $D1 and not defined $D2)
+                        {
+                            %{$CompatProblems{".client_method"}{"Annotation_Element_Removed_Default_Value"}{$AParam}} = (
+                                "Type_Name"=>$ClassName,
+                                "Old_Value"=>$D1,
+                                "Target"=>$AParam);
+                        }
+                        elsif(not defined $D1 and defined $D2)
+                        {
+                            %{$CompatProblems{".client_method"}{"Annotation_Element_Added_Default_Value"}{$AParam}} = (
+                                "Type_Name"=>$ClassName,
+                                "New_Value"=>$D2,
+                                "Target"=>$AParam);
+                        }
+                        elsif($D1 ne $D2)
+                        {
+                            %{$CompatProblems{".client_method"}{"Annotation_Element_Changed_Default_Value"}{$AParam}} = (
+                                "Type_Name"=>$ClassName,
+                                "Old_Value"=>$D1,
+                                "New_Value"=>$D2,
+                                "Target"=>$AParam);
+                        }
+                    }
+                    else
+                    {
+                        if(defined $D1)
+                        {
+                            %{$CompatProblems{".client_method"}{"Removed_Annotation_Default_Element"}{$AParam}} = (
+                                "Type_Name"=>$ClassName,
+                                "Elem_Type"=>$R1,
+                                "Old_Value"=>$D1,
+                                "Target"=>$AParam);
+                        }
+                        else
+                        {
+                            %{$CompatProblems{".client_method"}{"Removed_Annotation_NonDefault_Element"}{$AParam}} = (
+                                "Type_Name"=>$ClassName,
+                                "Elem_Type"=>$R1,
+                                "Target"=>$AParam);
+                        }
+                    }
+                }
+                
+                foreach my $AParam (sort keys(%{$AnnParam{2}}))
+                {
+                    if(not defined $AnnParam{1}{$AParam})
+                    {
+                        my $R2 = $AnnParam{2}{$AParam}{"Return"};
+                        
+                        if(defined $AnnParam{2}{$AParam}{"Default"})
+                        {
+                            my $D2 = $AnnParam{2}{$AParam}{"Default"};
+                            %{$CompatProblems{".client_method"}{"Added_Annotation_Default_Element"}{$AParam}} = (
+                                "Type_Name"=>$ClassName,
+                                "Elem_Type"=>$R2,
+                                "New_Value"=>$D2,
+                                "Target"=>$AParam);
+                        }
+                        else
+                        {
+                            %{$CompatProblems{".client_method"}{"Added_Annotation_NonDefault_Element"}{$AParam}} = (
+                                "Type_Name"=>$ClassName,
+                                "Elem_Type"=>$R2,
+                                "Target"=>$AParam);
                         }
                     }
                 }
@@ -2542,14 +2654,14 @@ sub getSummary($)
     # check rules
     foreach my $Method (sort keys(%CompatProblems))
     {
-        foreach my $Kind (keys(%{$CompatProblems{$Method}}))
+        foreach my $Kind (sort keys(%{$CompatProblems{$Method}}))
         {
             if(not defined $CompatRules{"Binary"}{$Kind} and not defined $CompatRules{"Source"}{$Kind})
             { # unknown rule
                 if(not $UnknownRules{$Level}{$Kind})
                 { # only one warning
                     printMsg("WARNING", "unknown rule \"$Kind\" (\"$Level\")");
-                    $UnknownRules{$Level}{$Kind}=1;
+                    $UnknownRules{$Level}{$Kind} = 1;
                 }
             }
         }
@@ -3385,7 +3497,13 @@ sub getReportMethodProblems($$)
 sub showType($$$)
 {
     my ($Name, $Html, $LVer) = @_;
-    my $TType = $TypeInfo{$LVer}{$TName_Tid{$LVer}{$Name}}{"Type"};
+    my $TInfo = $TypeInfo{$LVer}{$TName_Tid{$LVer}{$Name}};
+    my $TType = $TInfo->{"Type"};
+    
+    if($TInfo->{"Annotation"}) {
+        $TType = '@'.$TType;
+    }
+    
     if($Html) {
         $Name = "<span class='ttype'>".$TType."</span> ".specChars($Name);
     }

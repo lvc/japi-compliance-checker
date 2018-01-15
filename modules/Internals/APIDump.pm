@@ -323,8 +323,9 @@ sub readClasses($$$)
     my $InAnnotations = undef;
     my $InAnnotations_Class = undef;
     my $InAnnotations_Method = undef;
-    my %AnnotationName = ();
+    my %ConstantTypeName = ();
     my %AnnotationNum = (); # support for Java 7
+    my %ConstantName = ();
     
     my ($ParamPos, $FieldPos) = (0, 0);
     my ($LINE, $Stay, $Run, $NonEmpty) = (undef, 0, 1, undef);
@@ -462,7 +463,7 @@ sub readClasses($$$)
                     $AName=~s/\$/./g;
                     $AName=~s/\//./g;
                     
-                    $AnnotationName{$CNum} = $AName;
+                    $ConstantTypeName{$CNum} = $AName;
                     
                     if(defined $AnnotationNum{$CNum})
                     { # support for Java 7
@@ -470,6 +471,15 @@ sub readClasses($$$)
                             $TypeAttr{"Annotations"}{registerType($AName, $LVer)} = 1;
                         }
                         delete($AnnotationNum{$CNum});
+                    }
+                }
+                elsif($LINE=~/=\s*(Utf8|Integer|Long|Float|Double)\s+(.*?)\Z/)
+                {
+                    if($1 eq "Utf8") {
+                        $ConstantName{$CNum} = "\"".$2."\"";
+                    }
+                    else {
+                        $ConstantName{$CNum} = $2;
                     }
                 }
                 
@@ -556,7 +566,7 @@ sub readClasses($$$)
             {
                 if($LINE=~/\A\s*\d+\:\s*#(\d+)/)
                 {
-                    if(my $AName = $AnnotationName{$1})
+                    if(my $AName = $ConstantTypeName{$1})
                     {
                         if($InAnnotations_Class) {
                             $TypeAttr{"Annotations"}{registerType($AName, $LVer)} = 1;
@@ -820,8 +830,9 @@ sub readClasses($$$)
             }
             
             %TypeAttr = ("Type"=>$2, "Name"=>$3); # reset previous class
-            %AnnotationName = (); # reset annotations of the class
+            %ConstantTypeName = (); # reset annotations of the class
             %AnnotationNum = (); # support for Java 7
+            %ConstantName = ();
             $InAnnotations_Class = 1;
             
             $FieldPos = 0; # reset field position
@@ -921,6 +932,44 @@ sub readClasses($$$)
         }
         elsif(defined $InAnnotations and index($LINE, "InnerClasses")!=-1) {
             $InAnnotations = undef;
+        }
+        elsif($CurrentMethod and index($LINE, "default_value")!=-1)
+        {
+            if($LINE=~/default_value:\s*[sISJBFDCZ]#(\d+)/)
+            {
+                if(defined $ConstantName{$1}) {
+                    $MethodInfo{$LVer}{$MName_Mid{$CurrentMethod}}{"Default"} = $ConstantName{$1};
+                }
+            }
+            elsif($LINE=~/default_value:\s*e#(\d+)\.#(\d+)/)
+            {
+                my ($ET, $EV) = ($1, $2);
+                if(defined $ConstantTypeName{$ET} and defined $ConstantName{$EV})
+                {
+                    $ET = $ConstantTypeName{$ET};
+                    $EV = $ConstantName{$EV};
+                    $EV=~s/\"//g;
+                    $MethodInfo{$LVer}{$MName_Mid{$CurrentMethod}}{"Default"} = $ET.".".$EV;
+                }
+            }
+            elsif($LINE=~/default_value:\s*\[(.*)\]/)
+            {
+                my $Arr = $1;
+                if($Arr)
+                {
+                    my @ArrU = ();
+                    foreach my $ArrP (split(/\s*,\s*/, $Arr))
+                    {
+                        if($ArrP=~/[sISJBFDCZ]#(\d+)/) {
+                            push(@ArrU, $ConstantName{$1});
+                        }
+                    }
+                    $MethodInfo{$LVer}{$MName_Mid{$CurrentMethod}}{"Default"} = "{".join(",", @ArrU)."}";
+                }
+                else {
+                    $MethodInfo{$LVer}{$MName_Mid{$CurrentMethod}}{"Default"} = "{}";
+                }
+            }
         }
         else
         {

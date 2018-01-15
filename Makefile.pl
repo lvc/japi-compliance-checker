@@ -3,22 +3,24 @@
 # Makefile for Java API Compliance Checker
 # Install/remove the tool for GNU/Linux, FreeBSD and Mac OS X
 #
-# Copyright (C) 2011-2016 Andrey Ponomarenko's ABI Laboratory
+# Copyright (C) 2011-2018 Andrey Ponomarenko's ABI Laboratory
 #
 # Written by Andrey Ponomarenko
 #
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License or the GNU Lesser
-# General Public License as published by the Free Software Foundation.
+# This library is free software; you can redistribute it and/or
+# modify it under the terms of the GNU Lesser General Public
+# License as published by the Free Software Foundation; either
+# version 2.1 of the License, or (at your option) any later version.
 #
-# This program is distributed in the hope that it will be useful,
+# This library is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+# Lesser General Public License for more details.
 #
-# You should have received a copy of the GNU General Public License
-# and the GNU Lesser General Public License along with this program.
-# If not, see <http://www.gnu.org/licenses/>.
+# You should have received a copy of the GNU Lesser General Public
+# License along with this library; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
+# MA  02110-1301  USA.
 ###########################################################################
 use strict;
 use Getopt::Long;
@@ -124,17 +126,7 @@ sub scenario()
             print STDERR "ERROR: destdir is not absolute path\n";
             exit(1);
         }
-        if(not -d $DESTDIR)
-        {
-            print STDERR "ERROR: you should create destdir directory first\n";
-            exit(1);
-        }
         $PREFIX = $DESTDIR.$PREFIX;
-        if(not -d $PREFIX)
-        {
-            print STDERR "ERROR: you should create installation directory first (destdir + prefix):\n  mkdir -p $PREFIX\n";
-            exit(1);
-        }
     }
     else
     {
@@ -143,9 +135,16 @@ sub scenario()
             print STDERR "ERROR: prefix is not absolute path\n";
             exit(1);
         }
-        if(not -d $PREFIX)
+    }
+    
+    if($Install)
+    {
+        if(not -d $PREFIX) {
+            mkpath($PREFIX);
+        }
+        elsif(not -w $PREFIX)
         {
-            print STDERR "ERROR: you should create prefix directory first\n";
+            print STDERR "ERROR: you should be root\n";
             exit(1);
         }
     }
@@ -158,11 +157,6 @@ sub scenario()
     my $REL_PATH = catFile("..", "share", $TOOL_SNAME);
     my $TOOL_PATH = catFile($EXE_PATH, $TOOL_SNAME);
     
-    if(not -w $PREFIX)
-    {
-        print STDERR "ERROR: you should be root\n";
-        exit(1);
-    }
     if($Remove)
     {
         if(-e $EXE_PATH."/".$TOOL_SNAME)
@@ -212,19 +206,21 @@ sub scenario()
             copyDir($ARCHIVE_DIR."/modules", $MODULES_PATH);
         }
         
-        # check PATH
-        my $Warn = "WARNING: your PATH variable doesn't include \'$EXE_PATH\'\n";
-        
-        if($Config{"osname"}=~/win/i)
-        {
-            if($ENV{"PATH"}!~/(\A|[:;])\Q$EXE_PATH\E[\/\\]?(\Z|[:;])/i) { 
-                print $Warn;
+        if(not $DESTDIR)
+        { # check PATH
+            my $Warn = "WARNING: your PATH variable doesn't include \'$EXE_PATH\'\n";
+            
+            if($Config{"osname"}=~/win/i)
+            {
+                if($ENV{"PATH"}!~/(\A|[:;])\Q$EXE_PATH\E[\/\\]?(\Z|[:;])/i) {
+                    print $Warn;
+                }
             }
-        }
-        else
-        {
-            if($ENV{"PATH"}!~/(\A|[:;])\Q$EXE_PATH\E[\/\\]?(\Z|[:;])/) { 
-                print $Warn;
+            else
+            {
+                if($ENV{"PATH"}!~/(\A|[:;])\Q$EXE_PATH\E[\/\\]?(\Z|[:;])/) {
+                    print $Warn;
+                }
             }
         }
     }

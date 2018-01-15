@@ -423,6 +423,61 @@ sub testTool()
             }
         }");
         
+        # Changed Annotation
+        writeFile($Path_v1."/ChangedAnnotation.java",
+        "package $PackageName;
+        
+        enum MyEnum {
+            SUNDAY, MONDAY
+        }
+        
+        public \@interface ChangedAnnotation {
+            String value();
+            String datatype() default \"Str\";
+            int num1() default 1;
+            String[] values() default {\"Alice\", \"Bob\", \"Cindy\"};
+            int[] nums() default {1, 2, 3};
+            String safe_change() default \"Str\";
+            MyEnum day() default MyEnum.SUNDAY;
+            short num2() default 1;
+            long num3() default 1;
+            byte num4() default 1;
+            float num5() default 1.5f;
+            double num6() default 1.5;
+            boolean bit() default true;
+            char ch() default 'A';
+        }");
+        
+        writeFile($Path_v2."/ChangedAnnotation.java",
+        "package $PackageName;
+        
+        enum MyEnum {
+            SUNDAY, MONDAY
+        }
+        
+        public \@interface ChangedAnnotation {
+            String value() default \"Str\";
+            String datatype();
+            int[] values();
+            int[] nums() default {1, 2};
+            int[] new_default_param() default {1, 2};
+            int[] new_param();
+            String[] safe_change() default {\"Str\"};
+            MyEnum day() default MyEnum.MONDAY;
+        }");
+        
+        writeFile($TestsPath."/Test_ChangedAnnotation.java",
+        "import $PackageName.*;
+        public class Test_ChangedAnnotation {
+            public static void main(String[] args) {
+                testMethod();
+            }
+            
+            \@ChangedAnnotation(value=\"Val\")
+            static void testMethod() {
+            }
+        }");
+        
         # Beta Annotation
         writeFile($Path_v1."/Beta.java",
         "package $PackageName;
@@ -773,14 +828,22 @@ sub testTool()
     writeFile($Path_v1."/ChangedFinalFieldValue.java",
     "package $PackageName;
     public class ChangedFinalFieldValue {
-        public final int field = 1;
+        enum MyEnum {
+            ONE, TWO
+        }
+        public final int    field1 = 1;
         public final String field2 = \" \";
+        public final MyEnum field3 = MyEnum.ONE;
     }");
     writeFile($Path_v2."/ChangedFinalFieldValue.java",
     "package $PackageName;
     public class ChangedFinalFieldValue {
-        public final int field = 2;
+        enum MyEnum {
+            ONE, TWO
+        }
+        public final int    field1 = 2;
         public final String field2 = \"newValue\";
+        public final MyEnum field3 = MyEnum.TWO;
     }");
     
     # NonConstant_Field_Became_Static
