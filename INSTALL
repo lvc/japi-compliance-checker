@@ -27,7 +27,7 @@ Content:
 1. REQUIREMENTS FOR LINUX, FREEBSD and MAC OS X
 ===============================================
 
-   1. JDK or OpenJDK - development files (javap, javac)
+   1. JDK or OpenJDK - development files (javap, javac, jar, jmod)
    2. Perl 5 (5.8 or newer)
 
 
@@ -35,7 +35,7 @@ Content:
 2. REQUIREMENTS FOR MS WINDOWS
 ==============================
 
-   1. JDK or OpenJDK (javap, javac)
+   1. JDK or OpenJDK (javap, javac, jar, jmod)
    2. Active Perl 5 (5.8 or newer)
 
 
@@ -58,6 +58,7 @@ Content:
 ========
 
    1. japi-compliance-checker OLD.jar NEW.jar
+   2. japi-compliance-checker OLD.jmod NEW.jmod
 
 
 
@@ -71,8 +72,8 @@ Content:
             </version>
     
             <archives>
-                /path1/to/JAR(s)/
-                /path2/to/JAR(s)/
+                /path1/to/JAR(s) OR JMOD(s)/
+                /path2/to/JAR(s) OR JMOD(s)/
                 ...
             </archives>
 

@@ -1,22 +1,24 @@
 ###########################################################################
 # A module to create API dump from disassembled code
 #
-# Copyright (C) 2016-2017 Andrey Ponomarenko's ABI Laboratory
+# Copyright (C) 2016-2018 Andrey Ponomarenko's ABI Laboratory
 #
 # Written by Andrey Ponomarenko
 #
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License or the GNU Lesser
-# General Public License as published by the Free Software Foundation.
+# This library is free software; you can redistribute it and/or
+# modify it under the terms of the GNU Lesser General Public
+# License as published by the Free Software Foundation; either
+# version 2.1 of the License, or (at your option) any later version.
 #
-# This program is distributed in the hope that it will be useful,
+# This library is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+# Lesser General Public License for more details.
 #
-# You should have received a copy of the GNU General Public License
-# and the GNU Lesser General Public License along with this program.
-# If not, see <http://www.gnu.org/licenses/>.
+# You should have received a copy of the GNU Lesser General Public
+# License along with this library; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
+# MA  02110-1301  USA.
 ###########################################################################
 use strict;
 use IPC::Open3;
@@ -109,23 +111,43 @@ sub getArchives($)
 sub readArchive($$)
 { # 1, 2 - library, 0 - client
     my ($LVer, $Path) = @_;
-    
     $Path = getAbsPath($Path);
-    my $JarCmd = getCmdPath("jar");
-    if(not $JarCmd) {
-        exitStatus("Not_Found", "can't find \"jar\" command");
+    
+    my $ExtractCmd = undef;
+    
+    if($Path=~/\.jar\Z/)
+    {
+        $ExtractCmd = getCmdPath("jar");
+        if(not $ExtractCmd) {
+            exitStatus("Not_Found", "can't find \"jar\" command");
+        }
+        $ExtractCmd .= " -xf \"$Path\"";
     }
+    elsif($Path=~/\.jmod\Z/)
+    {
+        $ExtractCmd = getCmdPath("jmod");
+        if(not $ExtractCmd) {
+            exitStatus("Not_Found", "can't find \"jmod\" command");
+        }
+        $ExtractCmd .= " extract \"$Path\"";
+    }
+    else {
+        exitStatus("Error", "unknown format of \'$Path\'");
+    }
+    
     my $ExtractPath = join_P($In::Opt{"Tmp"}, $ExtractCounter);
     if(-d $ExtractPath) {
         rmtree($ExtractPath);
     }
     mkpath($ExtractPath);
+    
     chdir($ExtractPath);
-    system($JarCmd." -xf \"$Path\"");
+    system($ExtractCmd);
     if($?) {
         exitStatus("Error", "can't extract \'$Path\'");
     }
     chdir($In::Opt{"OrigDir"});
+    
     my @Classes = ();
     foreach my $ClassPath (cmdFind($ExtractPath, "", "*\\.class"))
     {
@@ -176,6 +198,11 @@ sub readArchive($$)
     if($LVer)
     {
         foreach my $SubArchive (cmdFind($ExtractPath, "", "*\\.jar"))
+        { # recursive step
+            readArchive($LVer, $SubArchive);
+        }
+        
+        foreach my $SubArchive (cmdFind($ExtractPath, "", "*\\.jmod"))
         { # recursive step
             readArchive($LVer, $SubArchive);
         }
@@ -304,6 +331,16 @@ sub readClasses($$$)
     }
     
     my $TmpDir = $In::Opt{"Tmp"};
+    my $DumpFile = undef;
+    
+    if(defined $In::Opt{"Debug"})
+    {
+        if(my $DebugDir = getDebugDir($LVer))
+        {
+            mkpath($DebugDir);
+            $DumpFile = $DebugDir."/class-dump.txt";
+        }
+    }
     
     # ! private info should be processed
     my @Cmd = ($JavapCmd, "-s", "-private");
@@ -314,8 +351,20 @@ sub readClasses($$$)
     @Cmd = (@Cmd, @{$Paths});
     
     chdir($TmpDir."/".$ExtractCounter);
+    
+    my ($Err, $ErrMsg) = ();
+    
     my $Pid = open3(*IN, *OUT, *ERR, @Cmd);
+    ($Err, $ErrMsg) = ($?, $!);
+    
     close(IN);
+    close(ERR);
+    
+    chdir($In::Opt{"OrigDir"});
+    
+    if($Err==-1 and $Err>>8 and $ErrMsg) {
+        exitStatus("Error", "failed to run javap (".$ErrMsg.")");
+    }
     
     my (%TypeAttr, $CurrentMethod, $CurrentPackage, $CurrentClass, $CurrentClass_Short) = ();
     my ($InParamTable, $InVarTypeTable, $InExceptionTable, $InCode) = (0, 0, 0, 0);
@@ -331,7 +380,6 @@ sub readClasses($$$)
     my ($LINE, $Stay, $Run, $NonEmpty) = (undef, 0, 1, undef);
     
     my $DContent = "";
-    my $Debug = (defined $In::Opt{"Debug"});
     
     while($Run)
     {
@@ -343,7 +391,7 @@ sub readClasses($$$)
                 $NonEmpty = 1;
             }
             
-            if($Debug) {
+            if(defined $In::Opt{"Debug"}) {
                 $DContent .= $LINE;
             }
         }
@@ -687,7 +735,7 @@ sub readClasses($$$)
             
             my $LINE_N = <OUT>;
             
-            if($Debug) {
+            if(defined $In::Opt{"Debug"}) {
                 $DContent .= $LINE_N;
             }
             
@@ -767,7 +815,7 @@ sub readClasses($$$)
             $TypeAttr{"Fields"}{$FName}{"Pos"} = $FieldPos++;
             
             my $LINE_NP = <OUT>;
-            if($Debug) {
+            if(defined $In::Opt{"Debug"}) {
                 $DContent .= $LINE_NP;
             }
             
@@ -782,14 +830,14 @@ sub readClasses($$$)
             }
             
             $LINE_NP = <OUT>;
-            if($Debug) {
+            if(defined $In::Opt{"Debug"}) {
                 $DContent .= $LINE_NP;
             }
             
             if($LINE_NP=~/flags:/i)
             { # flags: ACC_PUBLIC, ACC_STATIC, ACC_FINAL, ACC_ANNOTATION
                 $LINE_NP = <OUT>;
-                if($Debug) {
+                if(defined $In::Opt{"Debug"}) {
                     $DContent .= $LINE_NP;
                 }
             }
@@ -983,18 +1031,14 @@ sub readClasses($$$)
     }
     
     waitpid($Pid, 0);
-    chdir($In::Opt{"OrigDir"});
-    
-    if(my $Err = $?>>8) {
-        exitStatus("Error", "failed to run javap");
-    }
+    close(OUT);
     
     if(not $NonEmpty) {
         exitStatus("Error", "internal error in parser");
     }
     
-    if($Debug) {
-        appendFile(getDebugDir($LVer)."/class-dump.txt", $DContent);
+    if(defined $In::Opt{"Debug"}) {
+        appendFile($DumpFile, $DContent);
     }
 }
 

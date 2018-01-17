@@ -1,4 +1,4 @@
-JAPICC 2.3
+JAPICC 2.4
 ==========
 
 NAME:
@@ -8,7 +8,7 @@ NAME:
   
   The Scala language is supported since 1.7 version of the tool.
   
-  The tool is developed by Andrey Ponomarenko: https://abi-laboratory.pro/
+  Java 9 is supported since 2.4 version of the tool.
   
   The tool is a core of the Java API Tracker project: https://abi-laboratory.pro/java/tracker/
 
@@ -21,6 +21,9 @@ REQUIRES:
 
 USAGE:
   japi-compliance-checker OLD.jar NEW.jar
+
+USAGE (JAVA 9):
+  japi-compliance-checker OLD.jmod NEW.jmod
 
 API DUMPS:
   japi-compliance-checker -dump LIB.jar -dump-path ./API.dump
