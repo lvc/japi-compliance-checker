@@ -4316,7 +4316,7 @@ sub readAPIDump($$$)
         }
     }
     
-    if(cmpVersions($APIVer, $API_DUMP_VERSION_MIN)<0)
+    if(cmpVersions($APIVer, $API_DUMP_VERSION_MIN)<0 and not $In::Opt{"CountMethods"})
     { # obsolete formats
         exitStatus("Dump_Version", "version of the API dump is too old and unsupported anymore, please regenerate it");
     }
