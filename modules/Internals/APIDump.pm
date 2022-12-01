@@ -199,12 +199,18 @@ sub readArchive($$)
     {
         foreach my $SubArchive (cmdFind($ExtractPath, "", "*\\.jar"))
         { # recursive step
-            readArchive($LVer, $SubArchive);
+            if(-f $SubArchive)
+            {
+                readArchive($LVer, $SubArchive);
+            }
         }
         
         foreach my $SubArchive (cmdFind($ExtractPath, "", "*\\.jmod"))
         { # recursive step
-            readArchive($LVer, $SubArchive);
+            if(-f $SubArchive)
+            {
+                readArchive($LVer, $SubArchive);
+            }
         }
     }
     
