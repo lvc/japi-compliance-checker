@@ -43,6 +43,7 @@ use File::Temp qw(tempdir);
 use File::Basename qw(dirname);
 use Cwd qw(abs_path cwd);
 use Data::Dumper;
+use JSON;
 
 my $TOOL_VERSION = "2.4";
 my $API_DUMP_VERSION = "2.4";
@@ -148,6 +149,7 @@ GetOptions("h|help!" => \$In::Opt{"Help"},
   "jdk-path=s" => \$In::Opt{"JdkPath"},
   "external-css=s" => \$In::Opt{"ExternCss"},
   "external-js=s" => \$In::Opt{"ExternJs"},
+  "output-json" => \$In::Opt{"OutputJson"},
 # deprecated
   "minimal!" => \$In::Opt{"Minimal"},
   "hide-packages!" => \$In::Opt{"HidePackages"},
@@ -371,6 +373,9 @@ EXTRA OPTIONS:
       Default: 
           compat_reports/LIB_NAME/V1_to_V2/src_compat_report.html
 
+  -output-json
+      Output a json report as well as an html report.
+
   -quick
       Quick analysis.
       Disabled:
@@ -588,6 +593,14 @@ my $ContentSpanEnd = "</span>\n";
 my $ContentDivStart = "<div id=\"CONTENT_ID\" style=\"display:none;\">\n";
 my $ContentDivEnd = "</div>\n";
 my $Content_Counter = 0;
+
+#Json
+my %json_data = (
+    added_methods => [],
+    removed_methods => [],
+    method_problems => [],
+    type_problems => [],
+);
 
 sub getModules()
 {
@@ -3054,6 +3067,13 @@ sub getReportAdded($)
             
             foreach my $NameSpace (sort keys(%NameSpace_Method))
             {
+                my %j_added_method = (
+                    class => $ShowClass,
+                    ns => $NameSpace,
+                    jar => $ArchiveName,
+                    methods => [],
+                );
+
                 $ADDED_METHODS .= "<span class='jar'>$ArchiveName</span>, <span class='cname'>".specChars($ShowClass).".class</span><br/>\n";
                 
                 if($NameSpace) {
@@ -3088,6 +3108,7 @@ sub getReportAdded($)
                     else {
                         $ADDED_METHODS .= insertIDs($ContentSpanStart.$Signature.$ContentSpanEnd."<br/>\n".$ContentDivStart."<span class='mngl'>".specChars($Method)."</span><br/><br/>".$ContentDivEnd."\n");
                     }
+                    push @{ $j_added_method{methods} }, $Method;
                 }
                 
                 if($In::Opt{"Compact"}) {
@@ -3095,6 +3116,8 @@ sub getReportAdded($)
                 }
                 
                 $ADDED_METHODS .= "<br/>\n";
+
+                push @{ $json_data{added_methods} }, \%j_added_method;
             }
             
         }
@@ -3158,6 +3181,13 @@ sub getReportRemoved($)
             
             foreach my $NameSpace (sort keys(%NameSpace_Method))
             {
+                my %j_removed_method = (
+                    class => $ShowClass,
+                    ns => $NameSpace,
+                    jar => $ArchiveName,
+                    methods => [],
+                );
+
                 $REMOVED_METHODS .= "<span class='jar'>$ArchiveName</span>, <span class='cname'>".specChars($ShowClass).".class</span><br/>\n";
                 
                 if($NameSpace) {
@@ -3192,6 +3222,7 @@ sub getReportRemoved($)
                     else {
                         $REMOVED_METHODS .= insertIDs($ContentSpanStart.$Signature.$ContentSpanEnd."<br/>\n".$ContentDivStart."<span class='mngl'>".specChars($Method)."</span><br/><br/>".$ContentDivEnd."\n");
                     }
+                    push @{ $j_removed_method{methods} }, $Method;
                 }
                 
                 if($In::Opt{"Compact"}) {
@@ -3199,6 +3230,8 @@ sub getReportRemoved($)
                 }
                 
                 $REMOVED_METHODS .= "<br/>\n";
+
+                push @{ $json_data{removed_methods} }, \%j_removed_method;
             }
         }
     }
@@ -3415,6 +3448,13 @@ sub getReportMethodProblems($$)
             
             foreach my $NameSpace (sort keys(%NameSpace_Method))
             {
+                my %j_method_problems = (
+                    class => $ShowClass,
+                    ns => $NameSpace,
+                    jar => $ArchiveName,
+                    methods => [],
+                );
+
                 $METHOD_PROBLEMS .= "<span class='jar'>$ArchiveName</span>, <span class='cname'>".specChars($ShowClass).".class</span><br/>\n";
                 if($NameSpace) {
                     $METHOD_PROBLEMS .= "<span class='pkg_t'>package</span> <span class='pkg'>$NameSpace</span><br/>\n";
@@ -3423,6 +3463,11 @@ sub getReportMethodProblems($$)
                 my @SortedMethods = sort {lc($MethodInfo{1}{$a}{"Signature"}) cmp lc($MethodInfo{1}{$b}{"Signature"})} sort keys(%{$NameSpace_Method{$NameSpace}});
                 foreach my $Method (@SortedMethods)
                 {
+                    my %j_method_changes = (
+                        method => $Method,
+                        changes => [],
+                    );
+
                     my %AddAttr = ();
                     
                     $AddAttr{"Method_Short"} = $Method;
@@ -3442,6 +3487,7 @@ sub getReportMethodProblems($$)
                                 $METHOD_REPORT .= "<tr>\n<th>$ProblemNum</th>\n<td>".$Change."</td>\n<td>".$Effect."</td>\n</tr>\n";
                                 $ProblemNum += 1;
                                 $ProblemsNum += 1;
+                                push @{ $j_method_changes{changes} }, $Change =~ s|<.+?>||gr;
                             }
                         }
                     }
@@ -3471,10 +3517,13 @@ sub getReportMethodProblems($$)
                         
                         $METHOD_PROBLEMS .= "<table class='ptable'><tr><th width='2%'></th><th width='47%'>Change</th><th>Effect</th></tr>$METHOD_REPORT</table><br/>$ContentDivEnd\n";
                         
+                        push @{ $j_method_problems{methods} }, \%j_method_changes;
                     }
                 }
                 
                 $METHOD_PROBLEMS .= "<br/>";
+
+                push @{ $json_data{method_problems} }, \%j_method_problems;
             }
         }
     }
@@ -3561,6 +3610,13 @@ sub getReportTypeProblems($$)
             my @SortedTypes = sort {lc(showType($a, 0, 1)) cmp lc(showType($b, 0, 1))} keys(%{$NameSpace_Type{$NameSpace}});
             foreach my $TypeName (@SortedTypes)
             {
+                my %j_type_problems = (
+                    typename => $TypeName,
+                    ns => $NameSpace,
+                    jar => $ArchiveName,
+                    changes => [],
+                );
+
                 my $TypeId = $TName_Tid{1}{$TypeName};
                 
                 my $ProblemNum = 1;
@@ -3604,6 +3660,7 @@ sub getReportTypeProblems($$)
                             $TYPE_REPORT .= "<tr>\n<th>$ProblemNum</th>\n<td>".$Change."</td>\n<td>".$Effect."</td>\n</tr>\n";
                             $ProblemNum += 1;
                             $ProblemsNum += 1;
+                            push @{ $j_type_problems{changes} }, $Change =~ s|<.+?>||gr;
                         }
                     }
                 }
@@ -3635,6 +3692,7 @@ sub getReportTypeProblems($$)
                     $TYPE_PROBLEMS .= "<th width='2%'></th><th width='47%'>Change</th><th>Effect</th>";
                     $TYPE_PROBLEMS .= "</tr>$TYPE_REPORT</table>".$Affected."<br/><br/>$ContentDivEnd\n";
                 }
+                push @{ $json_data{type_problems} }, \%j_type_problems;
             }
             
             $TYPE_PROBLEMS .= "<br/>";
@@ -3882,6 +3940,11 @@ sub writeReport($$)
     my ($Level, $Report) = @_;
     my $RPath = getReportPath($Level);
     writeFile($RPath, $Report);
+    if($In::Opt{"OutputJson"})
+    {
+        open(my $json_out, ">", $RPath.'.json');
+        print {$json_out} JSON->new()->pretty()->encode(\%json_data);
+    }
 }
 
 sub createReport()
